@@ -1,0 +1,617 @@
+---
+title: Model Selection Procedure
+description:
+toc: true
+featuredImage: https://www.bijenpatel.com/content/images/size/w2000/2020/08/linear-model-selection-regularization.png
+featuredVideo:
+draft: false
+---
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Model Selection
+
+In this section, we present our selection steps for both Minority model and All_race model. For this selection procedure, we used forward selection and calculated AUC value for each breakout of data and chose the best ones to be our final two models.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(modelr)
+library(ROCR)
+```
+```{r message=FALSE, warning=FALSE, include=FALSE}
+get(load("processed_data.RData"))
+minority <- processed_data %>% filter(race4 == "All Other Races")
+minority <- minority %>% drop_na()
+```
+
+
+## Model for Minority
+
+### Model 1
+
+In this model for minority sub-dataset, we separated the dataset into two parts, each consists of 50% of the data. We used the first half as training dataset and the second half as test dataset to do validations.
+
+```{r message=FALSE, warning=FALSE}
+
+set.seed(1)
+minority_unShuffled <- minority
+minor <- minority_unShuffled[sample(nrow(minority_unShuffled)),]
+
+#training and testing for minority 50/50
+minor_Train <- minor[1:12890,] #50%
+minor_Test <- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+Although as shown in the results above, we had ten variables selected, we need to find the corresponding variable when it is not separated as dummy variables. Unfortunately, we need to eliminate Weight_statusobesity and num_cigarette_perdayno or light because other dummy variables in their category were not selected. Hence, our final model for model 1 is as below:
+
+<br>
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, data = minor_Train,
+                         family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+detach(minor_Train)
+```
+
+<br>
+
+From the model result, the corresponding model 1 is serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school with a AUC value of 0.7273158, which is acceptable. All variables are significant in the test shown above as all p-values are smaller than any reasonable alpha value.
+
+<br>
+
+### Model 2
+
+In this model for minority sub-dataset, flipped the test and train dataset from Model 1 and ran the whole thing again.
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+#training and testing for minority 50/50
+minor_Test <- minor[1:12890,] #50%
+minor_Train <- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+The result of model selection is the same as model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(minor_Train)
+```
+
+<br>
+
+From the result, we concluded that our model 2 for minority dataset is the same as model 1, but this model has a smaller AUC value which is 0.7204.
+
+<br>
+
+### Model 3
+
+In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first two to be the training dataset (66.7% data).
+
+<br>
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor1,minor2)
+minor_Test <- minor3
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+Again the selected variables are the same as those in model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(minor_Train)
+```
+
+<br>
+
+From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value which is 0.7282.
+
+<br>
+
+### Model 4
+
+In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first and the third devided dataset to be the training dataset (66.7% of data).
+
+<br>
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor1,minor3)
+minor_Test <- minor2
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+Again the selected variables are the same as those in model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(minor_Train)
+```
+
+<br>
+
+From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value which is 0.7281.
+
+<br>
+
+### Model 5
+
+In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the second and the third devided dataset to be the training dataset (66.7% of data).
+
+<br>
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor2,minor3)
+minor_Test <- minor1
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+Again the selected variables are the same as those in model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(minor_Train)
+```
+
+<br>
+
+From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value of 0.7150.
+
+<br>
+
+Since all of our AUC value is above 0.7, we say that our 5 models are all acceptable. Hence we picked the third model which has an AUC value of 0.7282, which was the greates among all five. Although we also acknowledge that all 5 models are the same, which is:
+
+<br>
+
+serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school
+
+<br>
+
+## Model for All_Race
+
+We followed the same procedure as we introduced in the previous section for the entire cleaned dataset.
+
+<br>
+
+### Model 1
+
+In this model for All_race, we separated the dataset into two parts, each consists of 50% of the data. We used the first half as training dataset and the second half as test dataset to do validations.
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1)
+processed_data <- processed_data %>% drop_na()
+processed_data_unShuffled <- processed_data
+whole <- processed_data_unShuffled[sample(nrow(processed_data_unShuffled)),]
+
+#training and testing for wholeity 50/50
+whole_Train <- whole[1:137263,] #50%
+whole_Test <- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+Like our model selection for the minority subset, we had to eliminate a few variables and again they are Weight_status and cigarette_per_day.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(whole_Train)
+```
+
+<br>
+From the model result, the corresponding model 1 is serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + total_num_methamphetamines + has_got_drug_at_school with a AUC value of 0.7194, which is acceptable. All variables are significant in the test shown above as all p-values are smaller than any reasonable alpha value.
+
+<br>
+
+### Model 2
+
+In this model for All_race, we separated the dataset into two parts, each consists of 50% of the data. We used the second half as training dataset and the fisrt half as test dataset to do validations.
+
+```{r message=FALSE, warning=FALSE}
+#training and testing for wholeity 50/50
+whole_Test <- whole[1:137263,] #50%
+whole_Train <- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+The result is the same as that of model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(whole_Train)
+```
+
+<br>
+
+The model is also the same as model 1 with an AUC value of 0.7194
+
+### Model 3
+
+In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first two to be the training dataset (66.7% data).
+
+```{r message=FALSE, warning=FALSE}
+#training and testing for wholeity 50/50
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole2)
+whole_Test <- whole3
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+The result is the same as that of model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(whole_Train)
+```
+
+<br>
+
+The model is also the same as model 1 with an AUC value of 0.7190
+
+
+### Model 4
+
+In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first and the third devided dataset to be the training dataset (66.7% of data).
+
+```{r message=FALSE, warning=FALSE}
+#training and testing for wholeity 50/50
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole3)
+whole_Test <- whole2
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+The result is the same as that of model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(whole_Train)
+```
+
+<br>
+
+The model is also the same as model 1 with an AUC value of 0.7217
+
+### Model 5
+
+In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the second and the third devided dataset to be the training dataset (66.7% of data).
+
+```{r message=FALSE, warning=FALSE}
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole2,whole3)
+whole_Test <- whole1
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+```
+
+<br>
+
+The result is the same as that of model 1.
+
+```{r message=FALSE, warning=FALSE}
+train_model_new <- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+detach(whole_Train)
+```
+
+<br>
+
+The model is also the same as model 1 with an AUC value of 0.7179
+
+<br>
+
+Hence, based on our model selection, we conclude that our model for all race is from the fourth model:
+
+<br>
+
+serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + total_num_methamphetamines + has_got_drug_at_school
+
+<br>
+This concludes our model selection process.
+
+## Bibliography
+
+Lead Image from: https://www.bijenpatel.com/content/images/size/w2000/2020/08/linear-model-selection-regularization.png

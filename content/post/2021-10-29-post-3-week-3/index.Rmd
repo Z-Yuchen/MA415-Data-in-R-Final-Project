@@ -1,0 +1,181 @@
+---
+title: Further Initial Data Cleaning
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-10-29'
+slug: []
+categories: []
+tags: []
+description: This is how we decided to load and clear data.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-10-29T07:58:23+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Data Cleaning + Explore + Data Equity
+
+We continued from our last post after we modified some of our original post 2 on names of variables.
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+raw_data <- read_csv('data/test.csv')
+```
+
+### Data Cleaning: 
+
+<br>
+
+Step 1 
+
+<br>
+
+We first discard columns which have more than 30% missing values. And stored new data set in to table "processed_data"
+```{r message=FALSE, warning=FALSE}
+Missing_value_overview <- raw_data %>% summarise_all(funs(sum(is.na(.))))
+Discard_variable <- as.data.frame(t(as.matrix(Missing_value_overview))) %>% filter(V1 > 13677 * 0.3)
+Discard_variable <- as.data.frame(t(as.matrix(Discard_variable)))
+processed_data <- select(raw_data,!colnames(Discard_variable))
+```
+<br>
+
+Step 2 
+
+<br>
+
+We then select the column we are going to analyze. We are mainly focused on how these teenagers' Age and BMI may potentially an effect their time spend on physical activity(q78 - q82) and emergence of risky health behavior (q8-q18)
+
+```{r}
+processed_data <- processed_data %>%
+  select(q1,BMIPCT,qn8,qn9,qn12,qn13,qn14,qn15,qn16,qn17,qn18,qn78,qn79,qn80,qn81,qn82)
+```
+
+<br>
+
+Step 3 
+
+<br>
+
+We then clean the rows with missing value for age and BMI as these two are the primary factor for our analysis. 
+
+```{r}
+processed_data <- processed_data  %>% drop_na(c(q1,BMIPCT)) 
+```
+
+<br>
+
+Step 4 
+
+<br>
+
+We convert BMI percentile into a categorical variable 'weight_status' according to the CDC BMI rules.
+
+```{r}
+processed_data <- processed_data %>% mutate(Weight_status = ifelse(BMIPCT<5,"underweight", ifelse(BMIPCT>=5 & BMIPCT<85,"healthyweight",ifelse(BMIPCT>=85 & BMIPCT<95,"overweight",ifelse(BMIPCT>=95,"obesity",BMIPCT))))) 
+```
+
+<br>
+
+Step 5
+
+<br>
+
+One important thing to do so that others may understand what we are doing is that we need to rename our variables:
+```{r}
+processed_data <- processed_data%>% 
+  rename("Age" = q1, 
+         "Body Mass Index Percentage" = BMIPCT, 
+         "Seat belt use"= qn8, 
+         "Riding with a drinking driver" = qn9, 
+         "Weapon carrying"=qn12,
+         "Weapon carrying at school" = qn13, 
+         "Gun carrying past 12 mos" = qn14,
+         "Safety concerns at school" = qn15,
+         "Threatened at school"= qn16, 
+         "Physical fighting" = qn17, 
+         "Physical fighting at school" = qn18, 
+         "physicallyactive"= qn78,
+         "tv"=qn79,
+         "videogames"=qn80,
+         "gymclass"=qn81,
+         "sports"=qn82)
+```
+
+<br>
+
+Step 6
+
+<br>
+
+We then transfer survey answers into real ages under 'Age'. (Note: since there are only a few number of teenagers have an age that is either <12 or 13, we combine these two categories with the age of 14 into a new group called "<14")
+
+```{r}
+processed_data$Age[processed_data$Age == 1 | processed_data$Age == 2 | processed_data$Age ==  3] <- "<14"
+processed_data$Age[processed_data$Age == 4] <- "15"
+processed_data$Age[processed_data$Age == 5] <- "16"
+processed_data$Age[processed_data$Age == 6] <- "17"
+processed_data$Age[processed_data$Age == 7] <- "18+"
+```
+
+Here, the data cleaning is complete for this post.
+
+<br>
+
+### Data Exploring:
+
+Now, We find some summary statistics for Age!
+```{r age}
+process_age <- processed_data %>% group_by(Age) %>% summarize(participated_teenagers=n()) 
+process_age %>%  ggplot(aes(x = Age, y= participated_teenagers)) + geom_bar(stat="identity") + geom_text(aes(label = participated_teenagers), size = 5, colour = 'red')
+```
+
+As the bar-graph shows, people takking the survey mainly fall into the age group of 15s, 16s, and 17s. 
+
+<br>
+
+We also drew a pie chart to see an overview for Weight status
+
+```{r Weight_status}
+process_Weight_status <- processed_data %>% group_by(Weight_status) %>% summarize(count=n()) %>% mutate(perc = count / sum(count)) %>% arrange(perc) %>% mutate(labels = scales::percent(perc))
+ggplot(process_Weight_status, aes(x="", y=count, fill= Weight_status)) +
+  geom_bar(stat="identity", width=1) +  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5), size = 5, colour = 'white') +
+            coord_polar("y", start=0) + theme_void()
+```
+
+As the pie chart shows, the majority of respondents have a healthy weight status. Also, the underweight respondents make up the least proportion. This is not suprising to see as the majority of the people should in normal body weight.
+
+<br>
+
+We also plotted weight against age:
+```{r}
+processed_data  %>% ggplot(aes(Age)) + geom_bar(aes(fill = as.character(Weight_status)),position = "fill") + labs(x = 'Age', y = 'Prop',fill = "Weight_status")
+```
+
+This bar chart shows that the relative distribution for weight status for each age group is similar. This fact can help us avoid bias when analyzing if there is any correlation between certian parameters and age groups in the future. The only trend we can identify is that for 17 age group, the proportion of healthy weight respondents is slightly less than other age groups.
+
+<br>
+
+### Data Equity:
+
+<br>
+
+Beneficence:
+
+<br>
+The collection process of our dataset strictly follows the principle of beneficence. There is no collection of personal identification information in any form, which is important since the dataset collected personal information. In our analysis, we mainly looked at effects of different age groups and BMIs, which is our way to avoid problems caused to groups with specific gender or race. This would also functions to avoid causing people who took the survey problem because their information are not leaked while having the potential to bring them benefits.
+
+<br>
+Justice:
+
+<br>
+The entire dataset is not collected by experiments but by survey, so there are not a lot of burden for each individual of collection except for the amount of time it took them to fill out the survey so we think there is not a undue burden to each individual. 
+
+<br>
+Limitations:
+
+<br>
+One limitation of our dataset might be that we will not have trend graphs as the dataset is basically a survey in multiple choice form, so most of our data would be categorical. Hence, we might not be able to explore the data with a curve trend.

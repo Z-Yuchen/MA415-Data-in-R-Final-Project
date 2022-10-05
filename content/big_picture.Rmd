@@ -1,0 +1,284 @@
+---
+title: "Minority Races vs Others: What Leads to Youth Suicide?"
+description:
+toc: true
+featuredImage: https://cdn.mos.cms.futurecdn.net/thwfaQDV2KfycPyq5vXRN4-970-80.jpg.webp
+featuredVideo:
+draft: false
+---
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+<br>
+
+## The United States' Suicide Rate Won't Stop Rising
+
+<br>
+
+According to the newest suicide data provided by CDC and presented by the US Today in 2020 January, 48,344 people died by suicide in 2018. This suicide death number increased by more than 1000 compared with the total suicide death number in 2017. Also, this increase in suicide death number did not just happen in 2018. Instead, the rise in deaths over time has been steady. Based on the data, the suicide rate has climbed 35% since 1999. Among all the deaths caused by suicide, teenagers make up a significant portion. As the study pressure for teenagers increases over years, more and more teenagers either considered suicide or attempted suicide. Based on heart-breaking news made by Huntington News on December 15, 2021, a student just committed suicide in Northeastern University Snell library during the final exam period. 
+
+<br>
+
+## Motivation 
+
+<br>
+
+As a group of Chinese international students studying in the U.S., we all experience more difficulties besides studying compare with the native students. For example, stress caused by language barrier, acculturation, and homesickness all contributed to the mental health issues of international students. If these mental health issues are not properly handled by the students, they may subsequently lead to suicide. We believe this situation is not unique to international students, but also happens to minority races in the United States as a whole. Similar to international students, minority races are not the mainstream of U.S society, which makes them potentially vulnerable. Therefore, we are interested in finding whether minority races have a higher probability of suicide than other races. Furthermore, we also want to find the leading factors that cause these suicide.  
+<br>
+
+## Thesis
+
+<br>
+
+The minority races have a higher probability for youth suicide consideration and attempt than other races while the leading causes of suicide for both groups are similar
+
+<br>
+
+## Minority Races Classification
+
+<br>
+
+To classify minority races, we used the countrywide teenager survey dataset "Youth Risk Behavior Surveillance System (YRBSS)" posted by CDC. We then make a pie chart shows distribution among various races.
+
+```{r message=FALSE, warning=FALSE, include = FALSE}
+library(tidyverse)
+library(ggpubr)
+library(modelr)
+library(ROCR)
+library(data.table)
+library(formattable)
+
+get(load("processed_data.RData"))
+```
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+processed_data %>% count(race4) %>% drop_na(race4) %>% 
+  mutate(perc = n / sum(n)) %>% mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="", y=n, fill= race4))+geom_bar(stat="identity", width=1) + 
+  geom_text(aes(label = labels),
+  position = position_stack(vjust = 0.5), size = 5, colour = 'white') +
+  coord_polar("y", start=0) + theme_void() + labs(fill="Race")
+```
+
+<br>
+
+Base on the pie chart, the white population takes up almost 60% of the data, while the Hispanic/Latino population takes up 15.4%, Black/African American population takes up almost 14%. Then all the other races combined still just take up 12.1% of the data. Yet, this trend is consistent with what has been shown on Wikipedia. Since Hispanic/Latino and Black or African American both have a larger sample size than other races, we excluded them and decided to combine all other 4 races (American Indian/Alaska Native, Asian, Native Hawaiian/Other Pacific Islander, and Multiple Races) into a big minority race group. 
+
+<br>
+
+## Does Minority Races has a higher probability of suicide?
+
+<br>
+
+To analyze whether minority races have a higher probability of suicide than other races, we separately make three charts showing the trend of the probability of youth suicide consideration, plan, and attempt from 1991 to 2019. 
+
+<br>
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+suicide_data_overview <- processed_data %>% 
+  drop_na(c(serious_consideration_suicide,attempt_suicide,race4,plan_suicide)) %>% 
+  select(year, race4, serious_consideration_suicide,attempt_suicide,plan_suicide) %>% 
+  group_by(year,race4) %>% summarise(prob_consider = sum(serious_consideration_suicide)/n(),
+                                     prob_plan = sum(plan_suicide)/n(), prob_attempt = sum(attempt_suicide)/n())
+a <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_consider, color = race4)) +
+  labs(title="Probability of suicide consideration, plan, and attempt",color = "Race")
+b <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_plan,color = race4))+labs(color = "Race")
+c <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_attempt,color = race4))+labs(color = "Race")
+ggarrange(a, b, c, ncol = 1, nrow = 3)
+```
+<br>
+
+Base on the above chart, we find that throughout the last three decades, minority races continuously have a higher probability than other races for all three aspects: suicide consideration, suicide plan, and suicide attempt. Thus, these charts indicate that minority races indeed are more likely to consider, plan, and even attempt suicide. These findings affirm our initial assumption and motivate us to further study what reasons lead to the suicide of minority races.
+
+
+## What leads to youth suicide?
+
+#### Table: Probability change in suicide consideration due to various factors
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+minority <- processed_data %>% filter(race4 == "All Other Races")
+
+set.seed(1)
+minority <- minority %>% drop_na()
+minority_unShuffled <- minority
+minor <- minority_unShuffled[sample(nrow(minority_unShuffled)),]
+
+# Minority Model
+minor_Train <- minor[1:17187,]
+minor_Test <- minor[17188:25780,]
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + 
+                               weapon_carrying + weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + 
+                               num_cigarette_per_day + 
+                               total_num_get_high + 
+                               total_num_needle_for_drug + 
+                               has_got_drug_at_school, 
+                             method = "forward", data = minor_Train, nvmax =10)
+
+Final_minor_model <- glm(serious_consideration_suicide ~ sex + weapon_carrying + 
+                           safety_concerns_at_school + Threatened_at_school + 
+                           first_time_drinking + total_num_get_high + 
+                           has_got_drug_at_school, family = binomial)
+
+detach(minor_Train)
+
+
+set.seed(1)
+processed_data <- processed_data %>% drop_na()
+processed_data_unShuffled <- processed_data
+whole <- processed_data_unShuffled[sample(nrow(processed_data_unShuffled)),]
+
+# All_Race Model
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole3)
+whole_Test <- whole2
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + 
+                               num_cigarette_per_day + 
+                               total_num_get_high + 
+                               total_num_needle_for_drug + 
+                               has_got_drug_at_school, 
+                             method = "forward", data = whole_Train, nvmax =10)
+
+Final_whole_model <- glm(serious_consideration_suicide ~ sex + 
+                           weapon_carrying + 
+                           safety_concerns_at_school + 
+                           Threatened_at_school +
+                           total_num_methamphetamines + 
+                           first_time_drinking + 
+                           total_num_get_high + 
+                           has_got_drug_at_school, family = binomial)
+
+detach(whole_Train)
+
+# Minority Model
+Final_model_coef <- coef(Final_minor_model)
+Predict_Probs <- matrix(1:8, nrow = 8, 
+                    dimnames = list(c("Male",
+                  "carrying weapon during past days",
+                  "feel unsafe at School", 
+                  "threatened by weapons on campus", 
+                  "drank after age 13 for the first time", 
+                  "have never drink alcohol yet",
+                  "got high by taking drugs",
+                  "had got drugs / got drug offerings at school"), c("Probability_considering_suicide_change_by_in_percentage")))
+for (i in 1:8) {
+    Predict_Probs[i] <- ((exp(Final_model_coef[i+1]) / 
+                            (1+exp(Final_model_coef[i+1])) - 
+                            exp(0)/(1+exp(0)))*100)
+    i <- i+1
+}
+
+#All_race model
+Final_whole_model_coef <- coef(Final_whole_model)
+Predict_Probs_whole <- matrix(2:9, nrow = 9, 
+                    dimnames = list(c("Male",
+                  "carrying weapon during past days",
+                  "feel unsafe at School", 
+                  "threatened by weapons on campus",
+                  "tried methamphetamines",
+                  "drank after age 13 for the first time", 
+                  "have never drink alcohol yet",
+                  "got high by taking drugs",
+                  "had got drugs / got drug offerings at school"), c("Probability_considering_suicide_change_by_in_percentage")))
+for (i in 1:9) {
+    Predict_Probs_whole[i] <- ((exp(Final_whole_model_coef[i+1]) / 
+                                  (1+exp(Final_whole_model_coef[i+1])) - 
+                                  exp(0)/(1+exp(0)))*100)
+    i <- i+1
+}
+
+#build dataframe for both model and connect them together
+merged_table <- merge(as.data.frame.matrix(Predict_Probs),
+                      as.data.frame.matrix(Predict_Probs_whole),
+                      by = "row.names", all = TRUE)%>%  arrange(desc(Probability_considering_suicide_change_by_in_percentage.y)) %>% 
+mutate(difference = Probability_considering_suicide_change_by_in_percentage.x - Probability_considering_suicide_change_by_in_percentage.y)
+
+colnames(merged_table) <- c('Health Risk Behaviors',
+                            'Minority',
+                            'All_Race',
+                            'Difference')
+
+round_df <- function(df, digits) {
+  nums <- vapply(df, is.numeric, FUN.VALUE = logical(1))
+
+  df[,nums] <- round(df[,nums], digits = digits)
+
+  (df)
+}
+
+merged_table <- round_df(merged_table, digits=3)
+
+merged_table$Minority[is.na(merged_table$Minority)]<-"N/A"
+merged_table$Difference[is.na(merged_table$Difference)]<-0
+
+merged_table %>% select(!Difference) %>% formattable(list( Minority = color_tile("#D4FEC6","#FEC6C6"),
+                            All_Race = color_tile("#D4FEC6","#FEC6C6")))
+```
+
+<br>
+After conducting logistic regression and model selection, we found that among these 12 variables, the most influential factors for minority races are quite similar with the factors of other races. As the table above shows, the most influential ones are whether the individual ever got high by taking drugs, got threatened by weapons on campus, and ever felt unsafe at school. Other two health risk behaviors in the graph (labeled with color light red), are also contributing a lot to youth consideration of suicide. Taking methamphetamine is another factor that increase the risk. Yet, it does not seem to be a big problem for the minority groups that we defined. Hence, for young individuals in major race groups, they can try to resist taking methamphetamine from any sources available to them.
+
+<br>
+
+These are all safety issues to some degree and this makes good sense as if the individual feels really unsafe due to all those problems, he/she will have great pressure that may lead him/her to suicide. However, we cannot solve these problems because those are society level problems, which requires everyone in the society to participate for changes.
+
+<br>
+
+However, as for factors that can actually reduce the chance of suicide consideration, being a male lowers the chance of considering suicide by a great amount. The most interesting thing is that if the individual had never drunk alcohol before, he/she will have much lower risk of thinking about suicide. Lower risk is also found if the individual drinks alcohol for the first time after he/she was 13 years old. This infer that for individuals below 13 years old who had already tried alcohol, they are more vulnerable for serious consideration of suicide. Hence, our model indicates that what a teenager can do to reduce the risk of thinking of suicide is do not drink alcohol.
+
+<br>
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+merged_table$`Health Risk Behaviors` <- as.factor(merged_table$`Health Risk Behaviors`)
+merged_table$`Minority` <- as.numeric(merged_table$`Minority`)
+merged_table %>% filter(Difference != 0) %>% arrange(desc(Difference)) %>% ggplot(aes(x = reorder(`Health Risk Behaviors`, -Difference), y = Difference)) + geom_bar(aes(fill = `Health Risk Behaviors`),stat="identity") + labs(y = "Difference (%)",x = "Minority minus All_Race") + theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+```
+<br>
+
+The chart above indicates the difference of changes of probability for suicide consideration predicted by minority model and all_race model. Take variable "Male" as an example: the graph above means that a male from minority race would be less likely to think about suicide compared with a male from any race. Yet, the differences between all seven variables between two models are not big: ranging from 1% to -1%. This means that other than methamphetamine usages, there is not a lot of differences between the minority and all of the race. If you are a young individual in the U.S., do not be afraid to ask help when you feel unsafe at school or had been drug abused by others, reaching out for help may reduce your chance to be bullied again and hence reduce your chance to thinking about suicide. On the other hands, if you are not a young individual reading this here, you can help reduce young students' possibility to consider suicide by simply reduce weapon carrying and drug carrying around the neighborhood near schools. This helps the younger generation by a lot!
+
+<br>
+
+Here is an [Interactive](https://errormaker.shinyapps.io/content/#) of ours!
+Here is another [Interactive](https://errormaker.netlify.app/interactive2.R). However, there is an issue in R shiny, so we included in the video, and here is our R file for that interactive.
+
+<br>
+
+In our interactive, we kind of utilized our model to predict a possibility of the users considering suicide. The target audience for this interactive is for all youngs from all races. Unfortunately, we do not have a lot of numerical values so our interactive looks exactly like a survey.
+
+<br>
+
+## Conclusion
+
+From our line chart, it is visible that young individuals from minority races, for which we combined American Indian/Alaska Native, Asian, Native Hawaiian/Other Pacific Islander, and Multiple Races, exhibit higher risk for suicide consideration, planning, and attempting. In addition, our models for both minority and all_race are very similar and has very small differences for what contributes to consideration of suicide. Hence, practicing controls for drugs, alcohol, and weapons carrying on the society level, can help the minority while not focusing all the efforts on protecting them.
+
+## Bibliography
+US Today News, title "More and more Americans are dying by suicide. What are we missing?",
+https://www.usatoday.com/story/news/nation/2020/01/30/u-s-suicide-rate-rose-again-2018-how-can-suicide-prevention-save-lives/4616479002/
+
+The Hountington News, title "Student in Snell Library found unresponsive in apparent suicide",
+https://huntnewsnu.com/67337/campus/student-in-snell-library-found-unresponsive-in-apparent-suicide/
+
+Lead Image credited by Jane0606, https://cdn.mos.cms.futurecdn.net/thwfaQDV2KfycPyq5vXRN4-970-80.jpg.webp

@@ -1,0 +1,137 @@
+---
+title: Big Picture & Interactive Plan
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-12-03'
+slug: []
+categories: []
+tags: []
+description: ~
+toc: yes
+authors: []
+series: []
+lastmod: '2021-12-03T23:39:28+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Big Picture & Interactive Plan
+
+### Big Picture
+
+<br>
+
+Motivation: 
+<br>
+Our project is motivetated by the fact that teen suicide is a growing health concern in U.S.. According to the Center for Disease Control and Prevention, teen suicide is the second-leading cause of death for young people ages 15 to 24, surpassed only by accidents. Therefore, we hope to find out which groups of U.S tennagers have a higher probabilty of sucide contemplation. Furthermore, we will try to incorporate other health risk factors into our model to see if they can potentially affect the probability of contemplated suicide. Hence, through this project, our ultimate goal is to identify which particular population has higher suicide risk and the health risk behaviors that can contributed to suicide. Hopefully, our results can provide some valuable suggestions for medical experts to better prevent teen suicide.  
+
+<br>
+
+Theses: 
+<br>
+Our main thesis for this project is to investigate factors affecting U.S. teenager's contemplated suicide probability. These factors include age, gender, race, state, and weight status as the basis. We will also try to see if health risk behaviors such as smoking, drinking, and drugs having, may contribute to comtemplated suicide probability. 
+
+<br>
+
+Story:
+<br>
+For now, our data shows some interesting trends regarding predicted suicide and actual suicide, including a inverse trend with gender and a consistent trend with race. The following graph was from our previous analysis:
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+library(tidyverse)
+#load full processed data 
+full_data <- get(load("data/processed_data_all.RData"))
+```
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+#load other suicide dataset
+library(data.table)
+suicide <- fread("data/suicide.txt")
+```
+
+```{r, echo = FALSE}
+# rename columns for Race for both dataset to be consistent
+suicide$Race[suicide$Race == "American Indian or Alaska Native"] <- 'American Indian/Alaska Native' 
+full_data$race[full_data$race == "Asian"] <- 'Asian or Pacific Islander'
+full_data$race[full_data$race == "Native Hawaiian/Other Pacific Islander"] <- 'Asian or Pacific Islander'
+
+#exclude Hispanic/Latino, Multiple Races (Non-Hispanic) race from the original dataset (Explained at the end)
+processed_original_data <- full_data %>% filter(!(race == "Hispanic/Latino" | race == "Multiple Races (Non-Hispanic)"))
+```
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+# clean the new dataset (we explain why choose age from 11 to 19 at the end)
+processed_suicide <- suicide %>% select(Year, Race, Gender, `Single-Year Ages Code`,Deaths,Population) %>% filter(`Single-Year Ages Code` <= 19 & `Single-Year Ages Code` >= 11) 
+
+# fill na with 0 for further calculation
+processed_suicide$Population = as.numeric(as.character(processed_suicide$Population))
+processed_suicide[is.na(processed_suicide)] <- 0
+```
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+# Create a table for real suicide occurrence for gender in each year
+suicide_gender_A <- processed_suicide %>% group_by(Year,Gender) %>% summarise(Deaths = sum(Deaths))
+suicide_gender_B <- processed_suicide %>% group_by(Year,Gender) %>% summarise(Population = sum(Population))
+suicide_gender <- left_join(suicide_gender_A, suicide_gender_B, by = c("Year","Gender")) %>% mutate(prob_real_suicide = Deaths/Population * 100) %>% select(Year, Gender, prob_real_suicide)
+
+# Create a table for real suicide occurrence for race in each year
+suicide_race_A <- processed_suicide %>% group_by(Year,Race) %>% summarise(Deaths = sum(Deaths))
+suicide_race_B <- processed_suicide %>% group_by(Year,Race) %>% summarise(Population = sum(Population))
+suicide_race <- left_join(suicide_race_A, suicide_race_B, by = c("Year","Race")) %>% mutate(prob_real_suicide = Deaths/Population * 100) %>% select(Year, Race, prob_real_suicide)
+```
+```{r, echo = FALSE}
+# conduct 2 logistic regressions for predicting probability of suicide contemplation using gender and race 
+predict_suicide_sex <- full_data %>% select(year,sex,serious_consideration_suicide)
+predict_suicide_sex_model <- glm(serious_consideration_suicide ~ as.factor(year) + sex, data = predict_suicide_sex, family = binomial)
+
+predict_suicide_race <- full_data %>% select(year,race,serious_consideration_suicide)
+predict_suicide_race_model <- glm(serious_consideration_suicide ~ as.factor(year) + race, data = predict_suicide_race, family = binomial)
+```
+
+```{r, echo = FALSE}
+# do the prediction using the logistic regression model we just built
+suicide_sex_predictions <- predict_suicide_sex %>% modelr::data_grid(year,sex) %>% modelr::add_predictions(predict_suicide_sex_model) %>% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %>% select(!pred) %>% arrange(desc(prob_contem_suicide))
+
+suicide_race_predictions <- predict_suicide_race %>% modelr::data_grid(year,race) %>% modelr::add_predictions(predict_suicide_race_model) %>% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %>% select(!pred) %>% arrange(desc(prob_contem_suicide))
+
+#rename sex variable for an easy understanding in table
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 0] <- 'Female' #Female
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 1] <- 'Male' #Male
+
+#rename columns name
+names(suicide_gender)[names(suicide_gender) == 'Year'] <- "year"
+names(suicide_gender)[names(suicide_gender) == 'Gender'] <- "sex"
+
+names(suicide_race)[names(suicide_race) == 'Year'] <- "year"
+names(suicide_race)[names(suicide_race) == 'Race'] <- "race"
+
+#combine predicted suicide contemplation with real suicide occurrence
+suicide_comparsion_sex <- left_join(suicide_gender,suicide_sex_predictions, by = c("year","sex")) %>% drop_na(prob_contem_suicide)
+
+suicide_comparsion_race <- left_join(suicide_race,suicide_race_predictions, by = c("year","race")) %>% drop_na(prob_contem_suicide)
+
+```
+
+<br>
+
+```{r}
+#Gender
+ggplot(suicide_comparsion_sex, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = sex)) + geom_line(aes(y = prob_contem_suicide, color = sex)) + labs(y = "prob") + annotate("text", x = 2003, y = 0.15, label = "predicted suicide contemplation") + annotate("text", x = 2003, y = 0.02, label = "real suicide")
+
+#Race
+ggplot(suicide_comparsion_race, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = race)) + geom_line(aes(y = prob_contem_suicide, color = race)) + labs(y = "prob") + annotate("text", x = 2010, y = 0.22, label = "predicted suicide contemplation") + annotate("text", x = 2003, y = 0.04, label = "real suicide")
+```
+<br>
+These graphs shows that while females tend to declare that they would attempt suicide, they actually do not actually attempt to do so as often as males. In addition, the predicted suicide probability has similar trend as the real suicide in terms of race but not year, with American Indian/Alaska Native being most likely to commit suicide, while other races tend to be similar. 
+
+<br>
+
+### Interactive Plan
+
+<br>
+
+One interesting interactive chart we want to show is down below (we have not drawn it in R but will include it in the future). Using the chart, we hope to see which part in U.S has a relatively higher suicide risk than other parts. Also, as we already add a “play” button, which can automatically shows the data from 1990 to 2020, by looking for the changing in color for various states, we want to see the trend that can shows which parts in US has an increasing suicide comtemplation and which has a decreasing suicide comtemplation. Also, through R Shiny, we will enable visitors to input the age, race, gender, and weight_status and automatically calculate their probability of comtemplated suicide. 
+
+<br>
+
+![](figure/plan.jpg)

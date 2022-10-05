@@ -1,0 +1,881 @@
+---
+title: Model Selection Procedure
+description:
+toc: true
+featuredImage: https://www.bijenpatel.com/content/images/size/w2000/2020/08/linear-model-selection-regularization.png
+featuredVideo:
+draft: false
+---
+
+<script src="/rmarkdown-libs/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="model-selection" class="section level2">
+<h2>Model Selection</h2>
+<p>In this section, we present our selection steps for both Minority model and All_race model. For this selection procedure, we used forward selection and calculated AUC value for each breakout of data and chose the best ones to be our final two models.</p>
+</div>
+<div id="model-for-minority" class="section level2">
+<h2>Model for Minority</h2>
+<div id="model-1" class="section level3">
+<h3>Model 1</h3>
+<p>In this model for minority sub-dataset, we separated the dataset into two parts, each consists of 50% of the data. We used the first half as training dataset and the second half as test dataset to do validations.</p>
+<pre class="r"><code>set.seed(1)
+minority_unShuffled &lt;- minority
+minor &lt;- minority_unShuffled[sample(nrow(minority_unShuffled)),]
+
+#training and testing for minority 50/50
+minor_Train &lt;- minor[1:12890,] #50%
+minor_Test &lt;- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = minor_Train, nvmax =10)
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;Weight_statusobesity&quot;             &quot;weapon_carryingYes&quot;              
+##  [5] &quot;safety_concerns_at_schoolYes&quot;     &quot;Threatened_at_schoolYes&quot;         
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>Although as shown in the results above, we had ten variables selected, we need to find the corresponding variable when it is not separated as dummy variables. Unfortunately, we need to eliminate Weight_statusobesity and num_cigarette_perdayno or light because other dummy variables in their category were not selected. Hence, our final model for model 1 is as below:</p>
+<p><br></p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, data = minor_Train,
+                         family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + has_got_drug_at_school, family = binomial, 
+##     data = minor_Train)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.0641  -0.6497  -0.5111  -0.3383   2.4038  
+## 
+## Coefficients:
+##                              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  -1.16635    0.05777 -20.191  &lt; 2e-16 ***
+## sexMale                      -0.86248    0.05218 -16.527  &lt; 2e-16 ***
+## weapon_carryingYes            0.50536    0.06350   7.959 1.74e-15 ***
+## safety_concerns_at_schoolYes  0.70992    0.09003   7.886 3.13e-15 ***
+## Threatened_at_schoolYes       0.71153    0.08156   8.724  &lt; 2e-16 ***
+## first_time_drinking13+       -0.28183    0.05825  -4.838 1.31e-06 ***
+## first_time_drinkingHaven&#39;t   -0.80299    0.06766 -11.868  &lt; 2e-16 ***
+## total_num_get_highYes         0.74246    0.06568  11.305  &lt; 2e-16 ***
+## has_got_drug_at_schoolYes     0.50083    0.05244   9.551  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 12592  on 12889  degrees of freedom
+## Residual deviance: 11253  on 12881  degrees of freedom
+## AIC: 11271
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = minor_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7273158</code></pre>
+<pre class="r"><code>detach(minor_Train)</code></pre>
+<p><br></p>
+<p>From the model result, the corresponding model 1 is serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school with a AUC value of 0.7273158, which is acceptable. All variables are significant in the test shown above as all p-values are smaller than any reasonable alpha value.</p>
+<p><br></p>
+</div>
+<div id="model-2" class="section level3">
+<h3>Model 2</h3>
+<p>In this model for minority sub-dataset, flipped the test and train dataset from Model 1 and ran the whole thing again.</p>
+<p><br></p>
+<pre class="r"><code>#training and testing for minority 50/50
+minor_Test &lt;- minor[1:12890,] #50%
+minor_Train &lt;- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = minor_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;Weight_statusobesity&quot;             &quot;weapon_carryingYes&quot;              
+##  [5] &quot;safety_concerns_at_schoolYes&quot;     &quot;Threatened_at_schoolYes&quot;         
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>The result of model selection is the same as model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + has_got_drug_at_school, family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -1.8904  -0.6615  -0.5195  -0.3265   2.4325  
+## 
+## Coefficients:
+##                              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  -1.12345    0.05587 -20.108  &lt; 2e-16 ***
+## sexMale                      -0.97030    0.05283 -18.365  &lt; 2e-16 ***
+## weapon_carryingYes            0.41116    0.06447   6.378 1.80e-10 ***
+## safety_concerns_at_schoolYes  0.56549    0.08972   6.303 2.93e-10 ***
+## Threatened_at_schoolYes       0.81646    0.08112  10.065  &lt; 2e-16 ***
+## first_time_drinking13+       -0.28485    0.05742  -4.961 7.02e-07 ***
+## first_time_drinkingHaven&#39;t   -0.81140    0.06727 -12.062  &lt; 2e-16 ***
+## total_num_get_highYes         0.83158    0.06431  12.930  &lt; 2e-16 ***
+## has_got_drug_at_schoolYes     0.51353    0.05282   9.723  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 12664  on 12889  degrees of freedom
+## Residual deviance: 11244  on 12881  degrees of freedom
+## AIC: 11262
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = minor_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7203612</code></pre>
+<pre class="r"><code>detach(minor_Train)</code></pre>
+<p><br></p>
+<p>From the result, we concluded that our model 2 for minority dataset is the same as model 1, but this model has a smaller AUC value which is 0.7204.</p>
+<p><br></p>
+</div>
+<div id="model-3" class="section level3">
+<h3>Model 3</h3>
+<p>In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first two to be the training dataset (66.7% data).</p>
+<p><br></p>
+<pre class="r"><code>#training and testing for minority 67/33
+minor1 &lt;- minor[1:8593,]
+minor2 &lt;- minor[8594:17187,]
+minor3 &lt;- minor[17188:25780,]
+
+minor_Train &lt;- rbind(minor1,minor2)
+minor_Test &lt;- minor3
+
+attach(minor_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = minor_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;Weight_statusobesity&quot;             &quot;weapon_carryingYes&quot;              
+##  [5] &quot;safety_concerns_at_schoolYes&quot;     &quot;Threatened_at_schoolYes&quot;         
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>Again the selected variables are the same as those in model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + has_got_drug_at_school, family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.0596  -0.6577  -0.5156  -0.3342   2.4137  
+## 
+## Coefficients:
+##                              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  -1.16696    0.04965 -23.504  &lt; 2e-16 ***
+## sexMale                      -0.90658    0.04534 -19.995  &lt; 2e-16 ***
+## weapon_carryingYes            0.46666    0.05507   8.473  &lt; 2e-16 ***
+## safety_concerns_at_schoolYes  0.67329    0.07818   8.612  &lt; 2e-16 ***
+## Threatened_at_schoolYes       0.73859    0.07079  10.433  &lt; 2e-16 ***
+## first_time_drinking13+       -0.25412    0.05023  -5.060  4.2e-07 ***
+## first_time_drinkingHaven&#39;t   -0.78366    0.05862 -13.368  &lt; 2e-16 ***
+## total_num_get_highYes         0.76900    0.05639  13.638  &lt; 2e-16 ***
+## has_got_drug_at_schoolYes     0.51278    0.04528  11.326  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 16856  on 17186  degrees of freedom
+## Residual deviance: 15047  on 17178  degrees of freedom
+## AIC: 15065
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = minor_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7281877</code></pre>
+<pre class="r"><code>detach(minor_Train)</code></pre>
+<p><br></p>
+<p>From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value which is 0.7282.</p>
+<p><br></p>
+</div>
+<div id="model-4" class="section level3">
+<h3>Model 4</h3>
+<p>In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first and the third devided dataset to be the training dataset (66.7% of data).</p>
+<p><br></p>
+<pre class="r"><code>#training and testing for minority 67/33
+minor1 &lt;- minor[1:8593,]
+minor2 &lt;- minor[8594:17187,]
+minor3 &lt;- minor[17188:25780,]
+
+minor_Train &lt;- rbind(minor1,minor3)
+minor_Test &lt;- minor2
+
+attach(minor_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = minor_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;Weight_statusobesity&quot;             &quot;weapon_carryingYes&quot;              
+##  [5] &quot;safety_concerns_at_schoolYes&quot;     &quot;Threatened_at_schoolYes&quot;         
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>Again the selected variables are the same as those in model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + has_got_drug_at_school, family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.0598  -0.6468  -0.5250  -0.3408   2.3978  
+## 
+## Coefficients:
+##                              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  -1.15283    0.04935 -23.361  &lt; 2e-16 ***
+## sexMale                      -0.90428    0.04531 -19.956  &lt; 2e-16 ***
+## weapon_carryingYes            0.44650    0.05576   8.008 1.17e-15 ***
+## safety_concerns_at_schoolYes  0.65240    0.07709   8.463  &lt; 2e-16 ***
+## Threatened_at_schoolYes       0.74506    0.07023  10.610  &lt; 2e-16 ***
+## first_time_drinking13+       -0.30534    0.05030  -6.070 1.28e-09 ***
+## first_time_drinkingHaven&#39;t   -0.75945    0.05799 -13.096  &lt; 2e-16 ***
+## total_num_get_highYes         0.77384    0.05650  13.697  &lt; 2e-16 ***
+## has_got_drug_at_schoolYes     0.52866    0.04563  11.585  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 16798  on 17185  degrees of freedom
+## Residual deviance: 15004  on 17177  degrees of freedom
+## AIC: 15022
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = minor_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7281271</code></pre>
+<pre class="r"><code>detach(minor_Train)</code></pre>
+<p><br></p>
+<p>From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value which is 0.7281.</p>
+<p><br></p>
+</div>
+<div id="model-5" class="section level3">
+<h3>Model 5</h3>
+<p>In this model for minority sub-dataset, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the second and the third devided dataset to be the training dataset (66.7% of data).</p>
+<p><br></p>
+<pre class="r"><code>#training and testing for minority 67/33
+minor1 &lt;- minor[1:8593,]
+minor2 &lt;- minor[8594:17187,]
+minor3 &lt;- minor[17188:25780,]
+
+minor_Train &lt;- rbind(minor2,minor3)
+minor_Test &lt;- minor1
+
+attach(minor_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = minor_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;Weight_statusobesity&quot;             &quot;weapon_carryingYes&quot;              
+##  [5] &quot;safety_concerns_at_schoolYes&quot;     &quot;Threatened_at_schoolYes&quot;         
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>Again the selected variables are the same as those in model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + first_time_drinking + 
+                         total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + has_got_drug_at_school, family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.0780  -0.6621  -0.5051  -0.3225   2.4423  
+## 
+## Coefficients:
+##                              Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  -1.11242    0.04855 -22.913  &lt; 2e-16 ***
+## sexMale                      -0.93597    0.04573 -20.468  &lt; 2e-16 ***
+## weapon_carryingYes            0.46139    0.05538   8.332  &lt; 2e-16 ***
+## safety_concerns_at_schoolYes  0.58392    0.07818   7.469 8.08e-14 ***
+## Threatened_at_schoolYes       0.80673    0.07025  11.484  &lt; 2e-16 ***
+## first_time_drinking13+       -0.29386    0.04969  -5.914 3.35e-09 ***
+## first_time_drinkingHaven&#39;t   -0.88211    0.05867 -15.035  &lt; 2e-16 ***
+## total_num_get_highYes         0.82020    0.05587  14.681  &lt; 2e-16 ***
+## has_got_drug_at_schoolYes     0.47664    0.04578  10.410  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 16859  on 17186  degrees of freedom
+## Residual deviance: 14949  on 17178  degrees of freedom
+## AIC: 14967
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = minor_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7149524</code></pre>
+<pre class="r"><code>detach(minor_Train)</code></pre>
+<p><br></p>
+<p>From the result, we concluded that our model 3 is the same as model 1, but this model has an AUC value of 0.7150.</p>
+<p><br></p>
+<p>Since all of our AUC value is above 0.7, we say that our 5 models are all acceptable. Hence we picked the third model which has an AUC value of 0.7282, which was the greates among all five. Although we also acknowledge that all 5 models are the same, which is:</p>
+<p><br></p>
+<p>serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school</p>
+<p><br></p>
+</div>
+</div>
+<div id="model-for-all_race" class="section level2">
+<h2>Model for All_Race</h2>
+<p>We followed the same procedure as we introduced in the previous section for the entire cleaned dataset.</p>
+<p><br></p>
+<div id="model-1-1" class="section level3">
+<h3>Model 1</h3>
+<p>In this model for All_race, we separated the dataset into two parts, each consists of 50% of the data. We used the first half as training dataset and the second half as test dataset to do validations.</p>
+<pre class="r"><code>set.seed(1)
+processed_data &lt;- processed_data %&gt;% drop_na()
+processed_data_unShuffled &lt;- processed_data
+whole &lt;- processed_data_unShuffled[sample(nrow(processed_data_unShuffled)),]
+
+#training and testing for wholeity 50/50
+whole_Train &lt;- whole[1:137263,] #50%
+whole_Test &lt;- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = whole_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;weapon_carryingYes&quot;               &quot;safety_concerns_at_schoolYes&quot;    
+##  [5] &quot;Threatened_at_schoolYes&quot;          &quot;total_num_methamphetaminesYes&quot;   
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>Like our model selection for the minority subset, we had to eliminate a few variables and again they are Weight_status and cigarette_per_day.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + total_num_methamphetamines + has_got_drug_at_school, 
+##     family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1992  -0.5741  -0.4667  -0.3027   2.4923  
+## 
+## Coefficients:
+##                               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                   -1.40215    0.01879  -74.63   &lt;2e-16 ***
+## sexMale                       -0.89739    0.01759  -51.03   &lt;2e-16 ***
+## weapon_carryingYes             0.40714    0.02133   19.08   &lt;2e-16 ***
+## safety_concerns_at_schoolYes   0.72153    0.03006   24.00   &lt;2e-16 ***
+## Threatened_at_schoolYes        0.78191    0.02749   28.44   &lt;2e-16 ***
+## first_time_drinking13+        -0.31740    0.01887  -16.82   &lt;2e-16 ***
+## first_time_drinkingHaven&#39;t    -0.76038    0.02310  -32.91   &lt;2e-16 ***
+## total_num_get_highYes          0.79888    0.02175   36.74   &lt;2e-16 ***
+## total_num_methamphetaminesYes  0.50832    0.03238   15.70   &lt;2e-16 ***
+## has_got_drug_at_schoolYes      0.50930    0.01745   29.19   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 120992  on 137262  degrees of freedom
+## Residual deviance: 108376  on 137253  degrees of freedom
+## AIC: 108396
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = whole_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7193951</code></pre>
+<pre class="r"><code>detach(whole_Train)</code></pre>
+<p><br>
+From the model result, the corresponding model 1 is serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + total_num_methamphetamines + has_got_drug_at_school with a AUC value of 0.7194, which is acceptable. All variables are significant in the test shown above as all p-values are smaller than any reasonable alpha value.</p>
+<p><br></p>
+</div>
+<div id="model-2-1" class="section level3">
+<h3>Model 2</h3>
+<p>In this model for All_race, we separated the dataset into two parts, each consists of 50% of the data. We used the second half as training dataset and the fisrt half as test dataset to do validations.</p>
+<pre class="r"><code>#training and testing for wholeity 50/50
+whole_Test &lt;- whole[1:137263,] #50%
+whole_Train &lt;- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = whole_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;weapon_carryingYes&quot;               &quot;safety_concerns_at_schoolYes&quot;    
+##  [5] &quot;Threatened_at_schoolYes&quot;          &quot;total_num_methamphetaminesYes&quot;   
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>The result is the same as that of model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + total_num_methamphetamines + has_got_drug_at_school, 
+##     family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1699  -0.5777  -0.4572  -0.2978   2.5052  
+## 
+## Coefficients:
+##                               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                   -1.41743    0.01883  -75.27   &lt;2e-16 ***
+## sexMale                       -0.88769    0.01762  -50.37   &lt;2e-16 ***
+## weapon_carryingYes             0.43948    0.02127   20.66   &lt;2e-16 ***
+## safety_concerns_at_schoolYes   0.70777    0.03020   23.44   &lt;2e-16 ***
+## Threatened_at_schoolYes        0.71912    0.02776   25.90   &lt;2e-16 ***
+## first_time_drinking13+        -0.28864    0.01889  -15.28   &lt;2e-16 ***
+## first_time_drinkingHaven&#39;t    -0.78844    0.02325  -33.91   &lt;2e-16 ***
+## total_num_get_highYes          0.79577    0.02183   36.45   &lt;2e-16 ***
+## total_num_methamphetaminesYes  0.52320    0.03232   16.19   &lt;2e-16 ***
+## has_got_drug_at_schoolYes      0.48664    0.01754   27.74   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 120372  on 137263  degrees of freedom
+## Residual deviance: 107824  on 137254  degrees of freedom
+## AIC: 107844
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = whole_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.719377</code></pre>
+<pre class="r"><code>detach(whole_Train)</code></pre>
+<p><br></p>
+<p>The model is also the same as model 1 with an AUC value of 0.7194</p>
+</div>
+<div id="model-3-1" class="section level3">
+<h3>Model 3</h3>
+<p>In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first two to be the training dataset (66.7% data).</p>
+<pre class="r"><code>#training and testing for wholeity 50/50
+whole1 &lt;- whole[1:91509,]
+whole2 &lt;- whole[91510:183018,]
+whole3 &lt;- whole[183019:274527,]
+
+whole_Train &lt;- rbind(whole1,whole2)
+whole_Test &lt;- whole3
+
+attach(whole_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = whole_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;weapon_carryingYes&quot;               &quot;safety_concerns_at_schoolYes&quot;    
+##  [5] &quot;Threatened_at_schoolYes&quot;          &quot;total_num_methamphetaminesYes&quot;   
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>The result is the same as that of model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + total_num_methamphetamines + has_got_drug_at_school, 
+##     family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1897  -0.5745  -0.4664  -0.3024   2.4933  
+## 
+## Coefficients:
+##                               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                   -1.40560    0.01629  -86.30   &lt;2e-16 ***
+## sexMale                       -0.89868    0.01523  -58.99   &lt;2e-16 ***
+## weapon_carryingYes             0.41321    0.01845   22.39   &lt;2e-16 ***
+## safety_concerns_at_schoolYes   0.70974    0.02597   27.32   &lt;2e-16 ***
+## Threatened_at_schoolYes        0.75607    0.02387   31.67   &lt;2e-16 ***
+## first_time_drinking13+        -0.31234    0.01635  -19.11   &lt;2e-16 ***
+## first_time_drinkingHaven&#39;t    -0.75816    0.01999  -37.94   &lt;2e-16 ***
+## total_num_get_highYes          0.80231    0.01879   42.69   &lt;2e-16 ***
+## total_num_methamphetaminesYes  0.51443    0.02803   18.36   &lt;2e-16 ***
+## has_got_drug_at_schoolYes      0.51194    0.01510   33.89   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 161369  on 183017  degrees of freedom
+## Residual deviance: 144554  on 183008  degrees of freedom
+## AIC: 144574
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = whole_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7191004</code></pre>
+<pre class="r"><code>detach(whole_Train)</code></pre>
+<p><br></p>
+<p>The model is also the same as model 1 with an AUC value of 0.7190</p>
+</div>
+<div id="model-4-1" class="section level3">
+<h3>Model 4</h3>
+<p>In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the first and the third devided dataset to be the training dataset (66.7% of data).</p>
+<pre class="r"><code>#training and testing for wholeity 50/50
+whole1 &lt;- whole[1:91509,]
+whole2 &lt;- whole[91510:183018,]
+whole3 &lt;- whole[183019:274527,]
+
+whole_Train &lt;- rbind(whole1,whole3)
+whole_Test &lt;- whole2
+
+attach(whole_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = whole_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;weapon_carryingYes&quot;               &quot;safety_concerns_at_schoolYes&quot;    
+##  [5] &quot;Threatened_at_schoolYes&quot;          &quot;total_num_methamphetaminesYes&quot;   
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>The result is the same as that of model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + total_num_methamphetamines + has_got_drug_at_school, 
+##     family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1797  -0.5782  -0.4607  -0.2996   2.5004  
+## 
+## Coefficients:
+##                               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                   -1.41589    0.01629  -86.94   &lt;2e-16 ***
+## sexMale                       -0.89141    0.01527  -58.38   &lt;2e-16 ***
+## weapon_carryingYes             0.42149    0.01849   22.79   &lt;2e-16 ***
+## safety_concerns_at_schoolYes   0.72279    0.02621   27.57   &lt;2e-16 ***
+## Threatened_at_schoolYes        0.77519    0.02390   32.44   &lt;2e-16 ***
+## first_time_drinking13+        -0.28828    0.01636  -17.62   &lt;2e-16 ***
+## first_time_drinkingHaven&#39;t    -0.77392    0.02013  -38.45   &lt;2e-16 ***
+## total_num_get_highYes          0.77695    0.01895   41.00   &lt;2e-16 ***
+## total_num_methamphetaminesYes  0.51421    0.02793   18.41   &lt;2e-16 ***
+## has_got_drug_at_schoolYes      0.48336    0.01518   31.85   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 160557  on 183017  degrees of freedom
+## Residual deviance: 143984  on 183008  degrees of freedom
+## AIC: 144004
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = whole_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7216782</code></pre>
+<pre class="r"><code>detach(whole_Train)</code></pre>
+<p><br></p>
+<p>The model is also the same as model 1 with an AUC value of 0.7217</p>
+</div>
+<div id="model-5-1" class="section level3">
+<h3>Model 5</h3>
+<p>In this model for All_race, we separated the dataset into three parts, each consists of 33.3% of the data. We then combine the second and the third devided dataset to be the training dataset (66.7% of data).</p>
+<pre class="r"><code>whole1 &lt;- whole[1:91509,]
+whole2 &lt;- whole[91510:183018,]
+whole3 &lt;- whole[183019:274527,]
+
+whole_Train &lt;- rbind(whole2,whole3)
+whole_Test &lt;- whole1
+
+attach(whole_Train)
+
+leaps_f &lt;- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + num_cigarette_per_day + 
+                               total_num_get_high + total_num_needle_for_drug + 
+                               has_got_drug_at_school, method = &quot;forward&quot;, data = whole_Train, nvmax =10)
+
+(b &lt;- which.min(summary(leaps_f)$cp))</code></pre>
+<pre><code>## [1] 10</code></pre>
+<pre class="r"><code>(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])</code></pre>
+<pre><code>##  [1] &quot;(Intercept)&quot;                      &quot;sexMale&quot;                         
+##  [3] &quot;weapon_carryingYes&quot;               &quot;safety_concerns_at_schoolYes&quot;    
+##  [5] &quot;Threatened_at_schoolYes&quot;          &quot;total_num_methamphetaminesYes&quot;   
+##  [7] &quot;first_time_drinking13+&quot;           &quot;first_time_drinkingHaven&#39;t&quot;      
+##  [9] &quot;num_cigarette_per_dayno or Light&quot; &quot;total_num_get_highYes&quot;           
+## [11] &quot;has_got_drug_at_schoolYes&quot;</code></pre>
+<p><br></p>
+<p>The result is the same as that of model 1.</p>
+<pre class="r"><code>train_model_new &lt;- glm(serious_consideration_suicide ~ sex + 
+                         weapon_carrying + safety_concerns_at_school + 
+                         Threatened_at_school + 
+                         first_time_drinking + total_num_get_high + total_num_methamphetamines +
+                         has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + weapon_carrying + 
+##     safety_concerns_at_school + Threatened_at_school + first_time_drinking + 
+##     total_num_get_high + total_num_methamphetamines + has_got_drug_at_school, 
+##     family = binomial)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1836  -0.5750  -0.4586  -0.2989   2.5023  
+## 
+## Coefficients:
+##                               Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                   -1.40805    0.01630  -86.40   &lt;2e-16 ***
+## sexMale                       -0.88685    0.01524  -58.21   &lt;2e-16 ***
+## weapon_carryingYes             0.43492    0.01840   23.64   &lt;2e-16 ***
+## safety_concerns_at_schoolYes   0.71081    0.02609   27.24   &lt;2e-16 ***
+## Threatened_at_schoolYes        0.72093    0.02399   30.05   &lt;2e-16 ***
+## first_time_drinking13+        -0.30800    0.01635  -18.84   &lt;2e-16 ***
+## first_time_drinkingHaven&#39;t    -0.79132    0.02010  -39.38   &lt;2e-16 ***
+## total_num_get_highYes          0.81176    0.01887   43.03   &lt;2e-16 ***
+## total_num_methamphetaminesYes  0.51856    0.02809   18.46   &lt;2e-16 ***
+## has_got_drug_at_schoolYes      0.49840    0.01517   32.85   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 160803  on 183017  degrees of freedom
+## Residual deviance: 143869  on 183008  degrees of freedom
+## AIC: 143889
+## 
+## Number of Fisher Scoring iterations: 5</code></pre>
+<pre class="r"><code>prob &lt;- predict(train_model_new, newdata = whole_Test, type = &quot;response&quot;)
+pred &lt;- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf &lt;- performance(pred, measure = &quot;tpr&quot;, x.measure = &quot;fpr&quot;)
+auc &lt;- performance(pred, measure = &quot;auc&quot;)
+auc &lt;- auc@y.values[[1]]
+auc</code></pre>
+<pre><code>## [1] 0.7179138</code></pre>
+<pre class="r"><code>detach(whole_Train)</code></pre>
+<p><br></p>
+<p>The model is also the same as model 1 with an AUC value of 0.7179</p>
+<p><br></p>
+<p>Hence, based on our model selection, we conclude that our model for all race is from the fourth model:</p>
+<p><br></p>
+<p>serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + total_num_methamphetamines + has_got_drug_at_school</p>
+<p><br>
+This concludes our model selection process.</p>
+</div>
+</div>
+<div id="bibliography" class="section level2">
+<h2>Bibliography</h2>
+<p>Lead Image from: <a href="https://www.bijenpatel.com/content/images/size/w2000/2020/08/linear-model-selection-regularization.png" class="uri">https://www.bijenpatel.com/content/images/size/w2000/2020/08/linear-model-selection-regularization.png</a></p>
+</div>

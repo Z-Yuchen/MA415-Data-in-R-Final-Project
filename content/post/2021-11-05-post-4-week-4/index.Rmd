@@ -1,0 +1,265 @@
+---
+title: Data Exploration
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-11-05'
+slug: []
+categories: []
+tags: []
+description: This is how we further explore data.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-11-05T08:46:26+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Data Exploration
+
+We changed our dataset into a more informative ones by including more specific data from each state, rather than just using the shortened summarized national data. So first we loaded and cleaned the dataset by doing the following steps: 
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+```{r message=FALSE, warning=FALSE}
+raw_data_a_m <- read_csv('data/states_a_m.csv')
+raw_data_n_z <- read_csv('data/states_n_z.csv')
+
+#combine two dataframes with different states informations into one dataframe, and named raw_data_national
+raw_data_national <- rbind(raw_data_a_m,raw_data_n_z)
+```
+
+
+<br>
+Like the last time, we delete column with more than 30% missing value
+
+```{r}
+processed_data <- raw_data_national[,!sapply(raw_data_national, function(x) mean(is.na(x)))>0.3]
+```
+
+
+<br>
+We kept useful variable (q8 - q18 safety issue, q25-28 depression& suicide, q33-q41 smoking & alcohol, q45-q57 drugs)
+
+```{r}
+processed_data <- raw_data_national %>% select(sitename, year,age, sex, grade, race7, stheight,stweight, bmi, bmipct, q8,q9,q12,q13,q15,q16,q17,q18,q25,q26,q27,q28,q32,q33,q38,q40,q41,q45,q46,q47,q50,q51,q52,q53,q56,q57)
+```
+
+
+<br>
+Renaming:
+```{r}
+#Rename variable
+processed_data <- processed_data %>% 
+  rename("bmi_percentage" = bmipct, 
+         "race"= race7, 
+         "height_without_shoes" = stheight, 
+         "weight_without_shoes" = stweight,
+         "seat_belt_use"= q8, 
+         "riding_with_a_drinking_driver" = q9, 
+         "weapon_carrying"=q12,
+         "weapon_carrying_at_school" = q13, 
+         "safety_concerns_at_school" = q15,
+         "Threatened_at_school"= q16, 
+         "Physical_fighting" = q17, 
+         "Physical_fighting_at_school" = q18, 
+         "feel_hopeless_2+weeks"= q25,
+         "serious_consideration_suicide"= q26,
+         "plan_suicide"= q27,
+         "attempt_suicide"= q28,
+         "freq_smoking_cigarette"= q32,
+         "num_cigarette_per_day"= q33,
+         "freq_smoking_cigar"= q38,
+         "first_time_drinking"= q40,
+         "freq_drinking"= q41,
+         "total_num_marijuana"= q45,
+         "first_time_marijuana"= q46,
+         "freq_marijuana"= q47,
+         "total_num_cocaine"= q50,
+         "total_num_get_high"= q51,
+         "total_num_heroin"= q52,
+         "total_num_methamphetamines"= q53,
+         "total_num_needle_for_drug"= q56,
+         "has_got_dr"= q57)
+
+head(processed_data, 5)
+```
+
+
+<br>
+For this post, we selected year 2019 for exploration
+```{r}
+processed_data_2019 <- processed_data %>% filter(year == 2019)
+```
+
+
+<br>
+We dropped missing value for crucial columns
+```{r}
+
+processed_data_2019 <- processed_data_2019 %>% drop_na(c(age,sex,race,height_without_shoes,weight_without_shoes,bmi,bmi_percentage)) 
+```
+
+
+<br>
+Thus we clean bmi outlier 
+```{r}
+# clean bmi outlier 
+Q1 <- quantile(processed_data_2019$bmi, .25)
+Q3 <- quantile(processed_data_2019$bmi, .75)
+IQR <- IQR(processed_data_2019$bmi)
+processed_data_2019 <- processed_data_2019 %>% filter(!(bmi > Q3 + 1.5*IQR | bmi < Q1 - 1.5*IQR)) 
+```
+
+
+<br>
+Rename answer for 'age' (As <12, 13 has very few people, we group these two group with age 14, and renamed group '<14') and also renaming race, sex, grade, and unify answers for survey questions.
+```{r}
+# rename answer for 'age' (As <12, 13 has very few people, we group these two group with age 14, and renamed group '<14')
+processed_data_2019$age[processed_data_2019$age == 1 | processed_data_2019$age == 2 | processed_data_2019$age ==  3] <- "<14"
+processed_data_2019$age[processed_data_2019$age == 4] <- "15"
+processed_data_2019$age[processed_data_2019$age == 5] <- "16"
+processed_data_2019$age[processed_data_2019$age == 6] <- "17"
+processed_data_2019$age[processed_data_2019$age == 7] <- "18+"
+
+# rename answer for 'race'
+processed_data_2019$race[processed_data_2019$race == 1] <- "American Indian/Alaska Native"
+processed_data_2019$race[processed_data_2019$race == 2] <- "Asian"
+processed_data_2019$race[processed_data_2019$race == 3] <- "Black or African American"
+processed_data_2019$race[processed_data_2019$race == 4] <- "Hispanic/Latino"
+processed_data_2019$race[processed_data_2019$race == 5] <- "Native Hawaiian/Other Pacific Islander"
+processed_data_2019$race[processed_data_2019$race == 6] <- "White"
+processed_data_2019$race[processed_data_2019$race == 7] <- "Multiple Races (Non-Hispanic)"
+
+# rename answer for 'sex'
+processed_data_2019$sex[processed_data_2019$sex == 1] <- 0 #Female
+processed_data_2019$sex[processed_data_2019$sex == 2] <- 1 #Male
+
+# rename answer for 'grade'
+processed_data_2019$grade[processed_data_2019$grade == 1] <- "9th grade"
+processed_data_2019$grade[processed_data_2019$grade == 2] <- "10th grade"
+processed_data_2019$grade[processed_data_2019$grade == 3] <- "11th grade"
+processed_data_2019$grade[processed_data_2019$grade == 4] <- "12th grade"
+processed_data_2019$grade[processed_data_2019$grade == 5] <- "Ungraded or other grade"
+
+# unify answer for other survey questions by minus 1 for further analysis
+processed_data_2019$seat_belt_use <- processed_data_2019$seat_belt_use - 1
+processed_data_2019$riding_with_a_drinking_driver <- processed_data_2019$riding_with_a_drinking_driver - 1
+processed_data_2019$weapon_carrying <- processed_data_2019$weapon_carrying - 1
+processed_data_2019$weapon_carrying_at_school <- processed_data_2019$weapon_carrying_at_school - 1
+processed_data_2019$safety_concerns_at_school <- processed_data_2019$safety_concerns_at_school - 1
+processed_data_2019$Threatened_at_school <- processed_data_2019$Threatened_at_school - 1
+processed_data_2019$Physical_fighting <- processed_data_2019$Physical_fighting - 1
+processed_data_2019$Physical_fighting_at_school <- processed_data_2019$Physical_fighting_at_school - 1
+processed_data_2019$'feel_hopeless_2+weeks' <- processed_data_2019$'feel_hopeless_2+weeks' - 1
+processed_data_2019$serious_consideration_suicide <- processed_data_2019$serious_consideration_suicide - 1
+processed_data_2019$plan_suicide <- processed_data_2019$plan_suicide - 1
+processed_data_2019$attempt_suicide <- processed_data_2019$attempt_suicide - 1
+processed_data_2019$freq_smoking_cigarette <- processed_data_2019$freq_smoking_cigarette - 1
+processed_data_2019$num_cigarette_per_day <- processed_data_2019$num_cigarette_per_day - 1
+processed_data_2019$freq_smoking_cigar <- processed_data_2019$freq_smoking_cigar - 1
+processed_data_2019$first_time_drinking <- processed_data_2019$first_time_drinking - 1
+processed_data_2019$freq_drinking <- processed_data_2019$freq_drinking - 1
+processed_data_2019$total_num_marijuana <- processed_data_2019$total_num_marijuana - 1
+processed_data_2019$freq_marijuana <- processed_data_2019$freq_marijuana - 1
+processed_data_2019$first_time_marijuana <- processed_data_2019$first_time_marijuana - 1
+processed_data_2019$total_num_cocaine <- processed_data_2019$total_num_cocaine - 1
+processed_data_2019$total_num_get_high <- processed_data_2019$total_num_get_high - 1
+processed_data_2019$total_num_heroin <- processed_data_2019$total_num_heroin - 1
+processed_data_2019$total_num_methamphetamines <- processed_data_2019$total_num_methamphetamines - 1
+processed_data_2019$total_num_needle_for_drug <- processed_data_2019$total_num_needle_for_drug - 1
+processed_data_2019$has_got_dr <- processed_data_2019$has_got_dr - 1
+```
+
+
+<br>
+Convert BMI percentile into a categorical variable 'weight_status' according to the CDC BMI rules.
+```{r}
+processed_data_2019 <- processed_data_2019 %>% mutate(Weight_status = ifelse(bmi_percentage<5,"underweight", ifelse(bmi_percentage>=5 & bmi_percentage<85,"healthyweight",ifelse(bmi_percentage>=85 & bmi_percentage<95,"overweight",ifelse(bmi_percentage>=95,"obesity",bmi_percentage))))) 
+```
+
+
+<br>
+Let us explore basic stats for key variables (Catching up on last post)
+```{r}
+#This code checks the distribution for age
+processed_data_2019 %>% group_by(age) %>% summarize(participated_teenagers=n()) %>%  ggplot(aes(x = age, y= participated_teenagers)) + geom_bar(stat="identity") + geom_text(aes(label = participated_teenagers), size = 5, colour = 'red')
+```
+
+As the bar-graph shows, people takking the survey mainly fall into the age group of 15s, 16s, and 17s. But other two big age group also have significantly amount of data.
+
+<br>
+Now, let's draw a pie chart to see an overview for Weight_status (Catching up on last post)
+```{r}
+
+processed_data_2019 %>% group_by(Weight_status) %>% summarize(count=n()) %>% mutate(perc = count / sum(count)) %>% arrange(perc) %>% mutate(labels = scales::percent(perc)) %>% ggplot(aes(x="", y=count, fill= Weight_status)) +
+  geom_bar(stat="identity", width=1) +  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5), size = 5, colour = 'white') +
+            coord_polar("y", start=0) + theme_void() 
+```
+
+As the pie chart shows, the majority of respondents have a healthy weight status. Also, the underweight respondents make up the least proportion. This is not suprising to see as the majority of the people should in normal body weight. However, it is surproising to see that obesity and overweight groups takes up about 27% of the data - that is big compared with underweight: 3.2%.
+
+<br>
+Let's Go deeper for analysis of Weight_status --> Find Weight_status distribution for each age group (Catching up on last post)
+```{r}
+ggplot(processed_data_2019, aes(age)) + geom_bar(aes(fill = as.character(Weight_status)),position = "fill") + labs(x = 'Age', y = 'Prop',fill = "Weight_status")
+```
+
+This bar chart shows that the relative distribution for weight status for each age group is similar.
+
+
+<br>
+```{r}
+predict_suicide <- processed_data_2019 %>% select(race,age,sex,Weight_status,bmi,serious_consideration_suicide) 
+predict_suicide_model <- glm(serious_consideration_suicide ~ race + age, data = predict_suicide, family = binomial)
+summary(predict_suicide_model)
+```
+
+As we tried to do a prediction for serious_consideration_suicide vs. race and age, it turned out that race looks far more significant than age. However, as the coefficients are not quite different from others: (0.08, 0.075, 0.053, 0.059 for the significant ones in race compared with intercept), the overall effect might also be mild.
+
+
+<br>
+```{r}
+Predict_Probs <- matrix(1:35, nrow = 7, 
+                    dimnames = list(c("American Indian/AlaskaNative","Asian","Black.African American", "Hispanic/Latino",
+                                      "Multiple Races", "Native Hawaiian/Other Pacific Islander", "White")
+                                    , c("<14","15","16","17","18+")))
+
+(suicide_coef <- coef(predict_suicide_model))
+
+Calculate_Probs <- function(beta_0, beta_1, beta_2){
+  upper_cal <- exp(beta_0+beta_1+beta_2)
+  lower_cal <- 1+exp(beta_0+beta_1+beta_2)
+  return(upper_cal / lower_cal)
+}
+
+beta_0 <- suicide_coef[1]
+
+for (i in 2:7) {
+  for (j in 2:5) {
+    Predict_Probs[i,j] <- Calculate_Probs(beta_0,suicide_coef[i], suicide_coef[j+6])
+    j <- j+1
+  }
+  i <- i+1
+}
+
+Predict_Probs[1,1] <- Calculate_Probs(beta_0,0,0)
+for (x in 2:5) {
+  Predict_Probs[1,x] <- Calculate_Probs(beta_0,0,suicide_coef[x+6])
+  x <- x+1
+}
+
+for (y in 2:7) {
+  Predict_Probs[y,1] <- Calculate_Probs(beta_0,suicide_coef[y],0)
+}
+
+knitr::kable(Predict_Probs)
+```
+
+From the result, it is seen visible that the predict probability of suicide is very uniform and are very high. This might because we had too little variables and also not many numerical variables, which in this case leads to a low intercept (with in 1).

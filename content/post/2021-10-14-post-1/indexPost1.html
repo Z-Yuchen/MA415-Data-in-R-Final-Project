@@ -1,0 +1,53 @@
+---
+title: Data Set Proposal
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-10-15'
+slug: []
+categories: []
+tags: []
+description: This is a description for three potential different datasets.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-10-14T07:12:12+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+<script src="/rmarkdown-libs/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="dataset-one" class="section level2">
+<h2>Dataset One</h2>
+<p>Dataset Name: Youth Risk Behavior Surveillance Dataset</p>
+<p>Retrieved From: <a href="https://www.cdc.gov/healthyyouth/data/yrbs/index.htm" class="uri">https://www.cdc.gov/healthyyouth/data/yrbs/index.htm</a></p>
+<p>Dataset Description:
+The first dataset is YRBS(Youth Risk Behavior Surveillance System) dataset from CDC. It is a survey-based research that monitors six major categories of health-related behaviors that contribute to the leading causes of death and disability among youth and adults. The main goal of this dataset is to provide researchers, policymakers, and public health officials with data to identify trends in risky behavior over time among youth and to aid public health planning and policymaking. This dataset was collected through one-time national surveys and ongoing surveys collected from middle school students. It has multiple columns of parameters either numerical and categorical.
+There are totally 99 questions in the dataset, we will select columns that we plan to use. Then we will convert some categorical data into actual numerical data. Since the dataset contains a lot of survey answers in the form of multiple-choice, we can replace the choices with actual values that represent the answer.
+We are mainly interested in finding certain exposures of youth risky behaviors that are more likely to lead to bad health outcomes such as obesity, injury, and so on. We plan to look into health problems caused by substance usage. Moreover, we can look into interrelations between unhealthy behaviors, for example, does students who consume a lot of alcohol also have a higher chance of smoking.</p>
+<p>Limitation:
+Since this is a survey based dataset, respondents can lie about their answers. Moreover, there will be missing data points that will be difficult to deal with and simply deleting the missing values may be harmful. One problem we may face would be during the process of data cleaning, it may be taxing to transfer all the categorical data from survey answers to more meaningful data points in terms of numerical and categorical data.</p>
+</div>
+<div id="dataset-two" class="section level2">
+<h2>Dataset Two</h2>
+<p>Dataset Name: 2021 Olympics in Tokyo</p>
+<p>Retrieved From: <a href="https://www.kaggle.com/arjunprasadsarkhel/2021-olympics-in-tokyo" class="uri">https://www.kaggle.com/arjunprasadsarkhel/2021-olympics-in-tokyo</a></p>
+<p>Dataset Description:
+This dataset covers information for more than 11,000 athletes, with 47 disciplines and 743 Teams taking part in the 2021(2020) Tokyo Olympics. It includes the details of the Athletes, Coaches, Teams participating and the Entries by gender. The basic information contains their names, countries represented, discipline, gender of competitors, name of the coaches. By using these datas, we are interested in finding the relationship between the numbers of medals and the demographic background of the athletes. We plan to select several variables we are interested in like medals, the countries athletes come from to apply more analysis on their correlation.</p>
+<p>Limitation:
+Although it contains lots of demographic information about the athletes, it might be insufficient for us to formalize an interesting topic oriented to some data.
+Although the dataset contains 5 tables, each table contains different subjects and some of the tables only have 40 unique values. The difference might be hard for us to find a correlation between variables in different tables.</p>
+</div>
+<div id="dataset-three" class="section level2">
+<h2>Dataset Three</h2>
+<p>Dataset Name: Fatal Police Shootings in the US</p>
+<p>Retrieved From: <a href="https://www.kaggle.com/kwullum/fatal-police-shootings-in-the-us?select=ShareRaceByCity.csv" class="uri">https://www.kaggle.com/kwullum/fatal-police-shootings-in-the-us?select=ShareRaceByCity.csv</a></p>
+<p>Dataset Description:
+This dataset deals with police violence. It provides data describing the fatal shooting in the US by a police officer in the line of duty. There are places, manner_of_death, armed, gender, race, and many other variables that can be used.</p>
+<p>Limitation:
+There is only 7 variables for the dataset, which will limit what we can find in the future. In “city” variable, it does not has a clear classification. For example, some city’s name is end with “CDP”, some is end with “Town”, and others ends with “city” etc. This creates a difficulty when we clean the data.</p>
+</div>

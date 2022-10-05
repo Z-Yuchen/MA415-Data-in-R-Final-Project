@@ -1,0 +1,528 @@
+---
+title: Initial Model Building
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-11-12'
+slug: []
+categories: []
+tags: []
+description: Model Building
+toc: yes
+authors: []
+series: []
+lastmod: '2021-11-05T08:46:26+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="model-building" class="section level2">
+<h2>Model Building</h2>
+<p>We first loaded tidyverse and loaded the processed dataset.</p>
+<p><br></p>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre class="r"><code># load the cleaned data from last time
+data &lt;- read_csv(&#39;data/processed_data_2019.csv&#39;)</code></pre>
+<p><br></p>
+<p>Building a model for predicting probablity of considering suicide during the past 12 months. First, as we think age and race may plays a large role in affecting the teenager’s suicide probablity, we use age and race as our predictor</p>
+<p><br></p>
+<pre class="r"><code>predict_suicide &lt;- data %&gt;% select(race,age,serious_consideration_suicide) 
+predict_suicide_model_inital &lt;- glm(serious_consideration_suicide ~ age + race, data = predict_suicide, family = binomial)
+summary(predict_suicide_model_inital)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ age + race, family = binomial, 
+##     data = predict_suicide)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -1.9661   0.5882   0.6262   0.6319   0.7470  
+## 
+## Coefficients:
+##                                            Estimate Std. Error z value Pr(&gt;|z|)
+## (Intercept)                                 1.16633    0.04967  23.481  &lt; 2e-16
+## age15                                      -0.01765    0.02208  -0.800  0.42399
+## age16                                      -0.01991    0.02231  -0.892  0.37216
+## age17                                       0.02435    0.02319   1.050  0.29380
+## age18+                                      0.08949    0.03016   2.967  0.00301
+## raceAsian                                   0.52051    0.05771   9.020  &lt; 2e-16
+## raceBlack or African American               0.48019    0.05129   9.362  &lt; 2e-16
+## raceHispanic/Latino                         0.32515    0.04970   6.543 6.04e-11
+## raceMultiple Races (Non-Hispanic)          -0.01279    0.05406  -0.237  0.81299
+## raceNative Hawaiian/Other Pacific Islander  0.32454    0.07254   4.474 7.69e-06
+## raceWhite                                   0.36341    0.04815   7.548 4.43e-14
+##                                               
+## (Intercept)                                ***
+## age15                                         
+## age16                                         
+## age17                                         
+## age18+                                     ** 
+## raceAsian                                  ***
+## raceBlack or African American              ***
+## raceHispanic/Latino                        ***
+## raceMultiple Races (Non-Hispanic)             
+## raceNative Hawaiian/Other Pacific Islander ***
+## raceWhite                                  ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 128459  on 136177  degrees of freedom
+## Residual deviance: 128135  on 136167  degrees of freedom
+##   (18475 observations deleted due to missingness)
+## AIC: 128157
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+<p><br></p>
+<p>Based on the table of coefficients, we can see that the majority of the p values for the age category is not significant, with only the category of 18+ having a significant p-value. Hence, we decided to remove the age category from our model. For the race category, only the category of non-hispanic race has a p-value that is not significant. To avoid the stuation if non-hispanic has a large percent in our data, we draw a pie chart to see the distribution of race.</p>
+<p><br></p>
+<pre class="r"><code># Pie chart showing the distribution of race
+predict_suicide %&gt;% select(race) %&gt;% count(race) %&gt;% mutate(prep = n /sum(n)) %&gt;% arrange(prep) %&gt;% mutate(labels = scales::percent(prep)) %&gt;% ggplot(aes(x=&quot;&quot;, y=prep, fill= race)) +
+  geom_bar(stat=&quot;identity&quot;, width=1) +  geom_text(aes(label = labels, fontface = &quot;bold&quot;),
+            size = 3, colour = &#39;white&#39;, position = position_stack(vjust = 0.5)) +
+            coord_polar(&quot;y&quot;, start=0) + theme_void() </code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p><br></p>
+<p>The pie chart shows that non-hispanic race only consists of 5 percent of the data. In other words, around 95% data has a race that is statistically significant. Therefore, we decide to keep race in our model.
+Then, we are considering adding other features into model. This time, we add other two feature: sex and Weights_status, and we found these two factors are all statistically significant.</p>
+<p><br></p>
+<pre class="r"><code>predict_suicide &lt;- data %&gt;% select(sex,race,Weight_status,serious_consideration_suicide)
+predict_suicide_model_final &lt;- glm(serious_consideration_suicide ~ sex + race + Weight_status, data = predict_suicide, family = binomial)
+summary(predict_suicide_model_final)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ sex + race + Weight_status, 
+##     family = binomial, data = predict_suicide)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1174   0.5086   0.5653   0.6899   0.9329  
+## 
+## Coefficients:
+##                                            Estimate Std. Error z value Pr(&gt;|z|)
+## (Intercept)                                 0.95266    0.04841  19.680  &lt; 2e-16
+## sex                                         0.66556    0.01475  45.113  &lt; 2e-16
+## raceAsian                                   0.50367    0.05833   8.634  &lt; 2e-16
+## raceBlack or African American               0.51104    0.05185   9.857  &lt; 2e-16
+## raceHispanic/Latino                         0.35153    0.05024   6.997 2.62e-12
+## raceMultiple Races (Non-Hispanic)           0.01504    0.05467   0.275    0.783
+## raceNative Hawaiian/Other Pacific Islander  0.33153    0.07324   4.526 6.00e-06
+## raceWhite                                   0.36167    0.04870   7.426 1.12e-13
+## Weight_statusobesity                       -0.34600    0.02302 -15.030  &lt; 2e-16
+## Weight_statusoverweight                    -0.22691    0.01882 -12.059  &lt; 2e-16
+## Weight_statusunderweight                   -0.21346    0.04098  -5.209 1.90e-07
+##                                               
+## (Intercept)                                ***
+## sex                                        ***
+## raceAsian                                  ***
+## raceBlack or African American              ***
+## raceHispanic/Latino                        ***
+## raceMultiple Races (Non-Hispanic)             
+## raceNative Hawaiian/Other Pacific Islander ***
+## raceWhite                                  ***
+## Weight_statusobesity                       ***
+## Weight_statusoverweight                    ***
+## Weight_statusunderweight                   ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 128459  on 136177  degrees of freedom
+## Residual deviance: 125828  on 136167  degrees of freedom
+##   (18475 observations deleted due to missingness)
+## AIC: 125850
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+<p><br></p>
+<p>Now, let’s make a table showing the predictions for suicide probability!</p>
+<p><br></p>
+<pre class="r"><code># get the coefficient 
+(suicide_coef &lt;- coef(predict_suicide_model_final))</code></pre>
+<pre><code>##                                (Intercept) 
+##                                 0.95266417 
+##                                        sex 
+##                                 0.66555877 
+##                                  raceAsian 
+##                                 0.50367218 
+##              raceBlack or African American 
+##                                 0.51104156 
+##                        raceHispanic/Latino 
+##                                 0.35153402 
+##          raceMultiple Races (Non-Hispanic) 
+##                                 0.01504371 
+## raceNative Hawaiian/Other Pacific Islander 
+##                                 0.33153167 
+##                                  raceWhite 
+##                                 0.36167216 
+##                       Weight_statusobesity 
+##                                -0.34600006 
+##                    Weight_statusoverweight 
+##                                -0.22691462 
+##                   Weight_statusunderweight 
+##                                -0.21345617</code></pre>
+<pre class="r"><code># do the prediction using the logistic regression model we just built
+suicide_predictions &lt;- predict_suicide %&gt;% modelr::data_grid(sex,race,Weight_status) %&gt;% modelr::add_predictions(predict_suicide_model_final) %&gt;% mutate(prob_suicide = 1- exp(pred)/(1+exp(pred))) %&gt;% select(!pred) %&gt;% arrange(desc(prob_suicide))
+
+#rename sex variable for an easy understanding in table
+suicide_predictions$sex[suicide_predictions$sex == 0] &lt;- &#39;Female&#39; #Female
+suicide_predictions$sex[suicide_predictions$sex == 1] &lt;- &#39;Male&#39; #Male
+
+knitr::kable(suicide_predictions)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">sex</th>
+<th align="left">race</th>
+<th align="left">Weight_status</th>
+<th align="right">prob_suicide</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">obesity</td>
+<td align="right">0.3528205</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">obesity</td>
+<td align="right">0.3493931</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">overweight</td>
+<td align="right">0.3261282</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">underweight</td>
+<td align="right">0.3231774</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">overweight</td>
+<td align="right">0.3228307</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">underweight</td>
+<td align="right">0.3198956</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">obesity</td>
+<td align="right">0.2812649</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">healthyweight</td>
+<td align="right">0.2783494</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">obesity</td>
+<td align="right">0.2772391</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">healthyweight</td>
+<td align="right">0.2753376</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">White</td>
+<td align="left">obesity</td>
+<td align="right">0.2752122</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">overweight</td>
+<td align="right">0.2578294</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">underweight</td>
+<td align="right">0.2552624</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">overweight</td>
+<td align="right">0.2540204</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">White</td>
+<td align="left">overweight</td>
+<td align="right">0.2521041</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">underweight</td>
+<td align="right">0.2514786</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">White</td>
+<td align="left">underweight</td>
+<td align="right">0.2495750</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Asian</td>
+<td align="left">obesity</td>
+<td align="right">0.2478082</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Black or African American</td>
+<td align="left">obesity</td>
+<td align="right">0.2464371</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Asian</td>
+<td align="left">overweight</td>
+<td align="right">0.2262827</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Black or African American</td>
+<td align="left">overweight</td>
+<td align="right">0.2249950</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Asian</td>
+<td align="left">underweight</td>
+<td align="right">0.2239350</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Black or African American</td>
+<td align="left">underweight</td>
+<td align="right">0.2226569</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">obesity</td>
+<td align="right">0.2188770</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">healthyweight</td>
+<td align="right">0.2168368</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">obesity</td>
+<td align="right">0.2163158</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">healthyweight</td>
+<td align="right">0.2134593</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">White</td>
+<td align="left">healthyweight</td>
+<td align="right">0.2117621</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">overweight</td>
+<td align="right">0.1991990</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">underweight</td>
+<td align="right">0.1970608</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">overweight</td>
+<td align="right">0.1968101</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">underweight</td>
+<td align="right">0.1946913</td>
+</tr>
+<tr class="odd">
+<td align="left">Female</td>
+<td align="left">Asian</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1890283</td>
+</tr>
+<tr class="even">
+<td align="left">Female</td>
+<td align="left">Black or African American</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1879012</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">obesity</td>
+<td align="right">0.1674575</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1654501</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">obesity</td>
+<td align="right">0.1646874</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Multiple Races (Non-Hispanic)</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1633834</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">White</td>
+<td align="left">obesity</td>
+<td align="right">0.1632975</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">overweight</td>
+<td align="right">0.1515057</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">underweight</td>
+<td align="right">0.1497837</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">overweight</td>
+<td align="right">0.1489523</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">White</td>
+<td align="left">overweight</td>
+<td align="right">0.1476717</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">underweight</td>
+<td align="right">0.1472542</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">White</td>
+<td align="left">underweight</td>
+<td align="right">0.1459857</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Asian</td>
+<td align="left">obesity</td>
+<td align="right">0.1448108</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Black or African American</td>
+<td align="left">obesity</td>
+<td align="right">0.1439005</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Asian</td>
+<td align="left">overweight</td>
+<td align="right">0.1306776</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Black or African American</td>
+<td align="left">overweight</td>
+<td align="right">0.1298427</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Asian</td>
+<td align="left">underweight</td>
+<td align="right">0.1291563</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Black or African American</td>
+<td align="left">underweight</td>
+<td align="right">0.1283297</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Native Hawaiian/Other Pacific Islander</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1245801</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Hispanic/Latino</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1224150</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">White</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1213300</td>
+</tr>
+<tr class="odd">
+<td align="left">Male</td>
+<td align="left">Asian</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1069869</td>
+</tr>
+<tr class="even">
+<td align="left">Male</td>
+<td align="left">Black or African American</td>
+<td align="left">healthyweight</td>
+<td align="right">0.1062848</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p>From the table, we can see that our model predict that the highest probability for considering suicide during the past 12 months are Female American Indian/Alaska Native with a Weight_status ‘obesity’. This group of people has a probability for considering suicide to nearly 35%. Also, we find that female generally has a higher probability for considering suicide during the past 12 months. Fruthermore,people with weight status of obesity generally has a higher probability for considering suicide compare with other weight status.</p>
+</div>

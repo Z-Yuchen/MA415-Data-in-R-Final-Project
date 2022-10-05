@@ -1,0 +1,617 @@
+---
+title: Dataset Combining
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-11-19'
+slug: []
+categories: []
+tags: []
+description: Dataset Combining
+toc: yes
+authors: []
+series: []
+lastmod: '2021-11-19T10:08:26+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="dataset-combining" class="section level2">
+<h2>Dataset Combining</h2>
+<p>In the last time, we use logistic regression to build a model for predicting suicide contemplation using race, weight_status, and sex. Therefore, to investigate whether if there is a relationship between suicide contemplation and real suicide occurrence for various gender and races, we combine our previous dataset with a new dataset. The new dataset is pulled from CDC wonder with ICD-10 codes covering X60-X84 representing intentional self harm as cause of death.</p>
+<pre class="r"><code>library(tidyverse)
+#load full processed data 
+full_data &lt;- get(load(&quot;data/processed_data_all.RData&quot;))</code></pre>
+<pre class="r"><code>#load other suicide dataset
+library(data.table)
+suicide &lt;- fread(&quot;data/suicide.txt&quot;)</code></pre>
+<pre class="r"><code># rename columns for Race for both dataset to be consistent
+suicide$Race[suicide$Race == &quot;American Indian or Alaska Native&quot;] &lt;- &#39;American Indian/Alaska Native&#39; 
+full_data$race[full_data$race == &quot;Asian&quot;] &lt;- &#39;Asian or Pacific Islander&#39;
+full_data$race[full_data$race == &quot;Native Hawaiian/Other Pacific Islander&quot;] &lt;- &#39;Asian or Pacific Islander&#39;
+
+#exclude Hispanic/Latino, Multiple Races (Non-Hispanic) race from the original dataset (Explained at the end)
+processed_original_data &lt;- full_data %&gt;% filter(!(race == &quot;Hispanic/Latino&quot; | race == &quot;Multiple Races (Non-Hispanic)&quot;))</code></pre>
+<pre class="r"><code># clean the new dataset (we explain why choose age from 11 to 19 at the end)
+processed_suicide &lt;- suicide %&gt;% select(Year, Race, Gender, `Single-Year Ages Code`,Deaths,Population) %&gt;% filter(`Single-Year Ages Code` &lt;= 19 &amp; `Single-Year Ages Code` &gt;= 11) 
+
+# fill na with 0 for further calculation
+processed_suicide$Population = as.numeric(as.character(processed_suicide$Population))
+processed_suicide[is.na(processed_suicide)] &lt;- 0</code></pre>
+<pre class="r"><code># Create a table for real suicide occurrence for gender in each year
+suicide_gender_A &lt;- processed_suicide %&gt;% group_by(Year,Gender) %&gt;% summarise(Deaths = sum(Deaths))
+suicide_gender_B &lt;- processed_suicide %&gt;% group_by(Year,Gender) %&gt;% summarise(Population = sum(Population))
+suicide_gender &lt;- left_join(suicide_gender_A, suicide_gender_B, by = c(&quot;Year&quot;,&quot;Gender&quot;)) %&gt;% mutate(prob_real_suicide = Deaths/Population * 100) %&gt;% select(Year, Gender, prob_real_suicide)
+
+# Create a table for real suicide occurrence for race in each year
+suicide_race_A &lt;- processed_suicide %&gt;% group_by(Year,Race) %&gt;% summarise(Deaths = sum(Deaths))
+suicide_race_B &lt;- processed_suicide %&gt;% group_by(Year,Race) %&gt;% summarise(Population = sum(Population))
+suicide_race &lt;- left_join(suicide_race_A, suicide_race_B, by = c(&quot;Year&quot;,&quot;Race&quot;)) %&gt;% mutate(prob_real_suicide = Deaths/Population * 100) %&gt;% select(Year, Race, prob_real_suicide)</code></pre>
+<pre class="r"><code># conduct 2 logistic regressions for predicting probability of suicide contemplation using gender and race 
+predict_suicide_sex &lt;- full_data %&gt;% select(year,sex,serious_consideration_suicide)
+predict_suicide_sex_model &lt;- glm(serious_consideration_suicide ~ as.factor(year) + sex, data = predict_suicide_sex, family = binomial)
+
+predict_suicide_race &lt;- full_data %&gt;% select(year,race,serious_consideration_suicide)
+predict_suicide_race_model &lt;- glm(serious_consideration_suicide ~ as.factor(year) + race, data = predict_suicide_race, family = binomial)
+
+#test whether predictors are significant 
+summary(predict_suicide_sex_model)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ as.factor(year) + 
+##     sex, family = binomial, data = predict_suicide_sex)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.1400   0.4628   0.5125   0.6579   0.7209  
+## 
+## Coefficients:
+##                     Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)         1.215031   0.015095  80.492  &lt; 2e-16 ***
+## as.factor(year)2001 0.057296   0.019989   2.866  0.00415 ** 
+## as.factor(year)2003 0.088859   0.018932   4.693 2.69e-06 ***
+## as.factor(year)2005 0.141111   0.017950   7.861 3.81e-15 ***
+## as.factor(year)2007 0.307351   0.018288  16.806  &lt; 2e-16 ***
+## as.factor(year)2009 0.305025   0.017785  17.150  &lt; 2e-16 ***
+## as.factor(year)2011 0.308190   0.017539  17.572  &lt; 2e-16 ***
+## as.factor(year)2013 0.205526   0.016684  12.318  &lt; 2e-16 ***
+## as.factor(year)2015 0.165215   0.016517  10.003  &lt; 2e-16 ***
+## as.factor(year)2017 0.106908   0.016609   6.437 1.22e-10 ***
+## as.factor(year)2019 0.017451   0.016574   1.053  0.29240    
+## sex                 0.659839   0.005593 117.973  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 905401  on 1031258  degrees of freedom
+## Residual deviance: 889599  on 1031247  degrees of freedom
+##   (117391 observations deleted due to missingness)
+## AIC: 889623
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+<pre class="r"><code>summary(predict_suicide_race_model)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = serious_consideration_suicide ~ as.factor(year) + 
+##     race, family = binomial, data = predict_suicide_race)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.0503   0.5432   0.5733   0.6022   0.7560  
+## 
+## Coefficients:
+##                                   Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                        1.16675    0.02192  53.225  &lt; 2e-16 ***
+## as.factor(year)2001                0.07108    0.01986   3.579 0.000345 ***
+## as.factor(year)2003                0.11345    0.01882   6.029 1.65e-09 ***
+## as.factor(year)2005                0.16475    0.01785   9.229  &lt; 2e-16 ***
+## as.factor(year)2007                0.33234    0.01820  18.264  &lt; 2e-16 ***
+## as.factor(year)2009                0.33157    0.01771  18.727  &lt; 2e-16 ***
+## as.factor(year)2011                0.33706    0.01747  19.294  &lt; 2e-16 ***
+## as.factor(year)2013                0.23045    0.01660  13.879  &lt; 2e-16 ***
+## as.factor(year)2015                0.19460    0.01644  11.834  &lt; 2e-16 ***
+## as.factor(year)2017                0.14342    0.01655   8.668  &lt; 2e-16 ***
+## as.factor(year)2019                0.05381    0.01651   3.259 0.001116 ** 
+## raceAsian or Pacific Islander      0.36453    0.01989  18.324  &lt; 2e-16 ***
+## raceBlack or African American      0.46771    0.01793  26.080  &lt; 2e-16 ***
+## raceHispanic/Latino                0.22442    0.01742  12.886  &lt; 2e-16 ***
+## raceMultiple Races (Non-Hispanic) -0.06040    0.01961  -3.081 0.002065 ** 
+## raceWhite                          0.33538    0.01660  20.198  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 905401  on 1031258  degrees of freedom
+## Residual deviance: 901955  on 1031243  degrees of freedom
+##   (117391 observations deleted due to missingness)
+## AIC: 901987
+## 
+## Number of Fisher Scoring iterations: 4</code></pre>
+<pre class="r"><code># check the coefficient 
+(suicide_coef_sex &lt;- coef(predict_suicide_sex_model))</code></pre>
+<pre><code>##         (Intercept) as.factor(year)2001 as.factor(year)2003 as.factor(year)2005 
+##          1.21503068          0.05729566          0.08885887          0.14111148 
+## as.factor(year)2007 as.factor(year)2009 as.factor(year)2011 as.factor(year)2013 
+##          0.30735132          0.30502484          0.30818958          0.20552572 
+## as.factor(year)2015 as.factor(year)2017 as.factor(year)2019                 sex 
+##          0.16521479          0.10690785          0.01745071          0.65983947</code></pre>
+<pre class="r"><code>(suicide_coef_race &lt;- coef(predict_suicide_race_model))</code></pre>
+<pre><code>##                       (Intercept)               as.factor(year)2001 
+##                        1.16675035                        0.07107962 
+##               as.factor(year)2003               as.factor(year)2005 
+##                        0.11344646                        0.16475211 
+##               as.factor(year)2007               as.factor(year)2009 
+##                        0.33234371                        0.33156764 
+##               as.factor(year)2011               as.factor(year)2013 
+##                        0.33706314                        0.23045243 
+##               as.factor(year)2015               as.factor(year)2017 
+##                        0.19459764                        0.14342327 
+##               as.factor(year)2019     raceAsian or Pacific Islander 
+##                        0.05381342                        0.36453120 
+##     raceBlack or African American               raceHispanic/Latino 
+##                        0.46771157                        0.22442310 
+## raceMultiple Races (Non-Hispanic)                         raceWhite 
+##                       -0.06040254                        0.33537683</code></pre>
+<pre class="r"><code># do the prediction using the logistic regression model we just built
+suicide_sex_predictions &lt;- predict_suicide_sex %&gt;% modelr::data_grid(year,sex) %&gt;% modelr::add_predictions(predict_suicide_sex_model) %&gt;% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %&gt;% select(!pred) %&gt;% arrange(desc(prob_contem_suicide))
+
+suicide_race_predictions &lt;- predict_suicide_race %&gt;% modelr::data_grid(year,race) %&gt;% modelr::add_predictions(predict_suicide_race_model) %&gt;% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %&gt;% select(!pred) %&gt;% arrange(desc(prob_contem_suicide))
+
+#rename sex variable for an easy understanding in table
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 0] &lt;- &#39;Female&#39; #Female
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 1] &lt;- &#39;Male&#39; #Male
+
+#rename columns name
+names(suicide_gender)[names(suicide_gender) == &#39;Year&#39;] &lt;- &quot;year&quot;
+names(suicide_gender)[names(suicide_gender) == &#39;Gender&#39;] &lt;- &quot;sex&quot;
+
+names(suicide_race)[names(suicide_race) == &#39;Year&#39;] &lt;- &quot;year&quot;
+names(suicide_race)[names(suicide_race) == &#39;Race&#39;] &lt;- &quot;race&quot;
+
+#combine predicted suicide contemplation with real suicide occurrence
+suicide_comparsion_sex &lt;- left_join(suicide_gender,suicide_sex_predictions, by = c(&quot;year&quot;,&quot;sex&quot;)) %&gt;% drop_na(prob_contem_suicide)
+
+suicide_comparsion_race &lt;- left_join(suicide_race,suicide_race_predictions, by = c(&quot;year&quot;,&quot;race&quot;)) %&gt;% drop_na(prob_contem_suicide)
+
+#visualize using kable
+knitr::kable(suicide_comparsion_sex)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">year</th>
+<th align="left">sex</th>
+<th align="right">prob_real_suicide</th>
+<th align="right">prob_contem_suicide</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">1999</td>
+<td align="left">Female</td>
+<td align="right">0.0018963</td>
+<td align="right">0.2288121</td>
+</tr>
+<tr class="even">
+<td align="right">1999</td>
+<td align="left">Male</td>
+<td align="right">0.0084640</td>
+<td align="right">0.1329792</td>
+</tr>
+<tr class="odd">
+<td align="right">2001</td>
+<td align="left">Female</td>
+<td align="right">0.0020845</td>
+<td align="right">0.2188593</td>
+</tr>
+<tr class="even">
+<td align="right">2001</td>
+<td align="left">Male</td>
+<td align="right">0.0082599</td>
+<td align="right">0.1265111</td>
+</tr>
+<tr class="odd">
+<td align="right">2003</td>
+<td align="left">Female</td>
+<td align="right">0.0020132</td>
+<td align="right">0.2135111</td>
+</tr>
+<tr class="even">
+<td align="right">2003</td>
+<td align="left">Male</td>
+<td align="right">0.0073710</td>
+<td align="right">0.1230640</td>
+</tr>
+<tr class="odd">
+<td align="right">2005</td>
+<td align="left">Female</td>
+<td align="right">0.0021141</td>
+<td align="right">0.2048680</td>
+</tr>
+<tr class="even">
+<td align="right">2005</td>
+<td align="left">Male</td>
+<td align="right">0.0077175</td>
+<td align="right">0.1175351</td>
+</tr>
+<tr class="odd">
+<td align="right">2007</td>
+<td align="left">Female</td>
+<td align="right">0.0017754</td>
+<td align="right">0.1791110</td>
+</tr>
+<tr class="even">
+<td align="right">2007</td>
+<td align="left">Male</td>
+<td align="right">0.0069861</td>
+<td align="right">0.1013584</td>
+</tr>
+<tr class="odd">
+<td align="right">2009</td>
+<td align="left">Female</td>
+<td align="right">0.0024116</td>
+<td align="right">0.1794533</td>
+</tr>
+<tr class="even">
+<td align="right">2009</td>
+<td align="left">Male</td>
+<td align="right">0.0076921</td>
+<td align="right">0.1015705</td>
+</tr>
+<tr class="odd">
+<td align="right">2011</td>
+<td align="left">Female</td>
+<td align="right">0.0026328</td>
+<td align="right">0.1789878</td>
+</tr>
+<tr class="even">
+<td align="right">2011</td>
+<td align="left">Male</td>
+<td align="right">0.0084673</td>
+<td align="right">0.1012821</td>
+</tr>
+<tr class="odd">
+<td align="right">2013</td>
+<td align="left">Female</td>
+<td align="right">0.0029761</td>
+<td align="right">0.1945744</td>
+</tr>
+<tr class="even">
+<td align="right">2013</td>
+<td align="left">Male</td>
+<td align="right">0.0084031</td>
+<td align="right">0.1110169</td>
+</tr>
+<tr class="odd">
+<td align="right">2015</td>
+<td align="left">Female</td>
+<td align="right">0.0037903</td>
+<td align="right">0.2009696</td>
+</tr>
+<tr class="even">
+<td align="right">2015</td>
+<td align="left">Male</td>
+<td align="right">0.0094165</td>
+<td align="right">0.1150581</td>
+</tr>
+<tr class="odd">
+<td align="right">2017</td>
+<td align="left">Female</td>
+<td align="right">0.0039810</td>
+<td align="right">0.2104960</td>
+</tr>
+<tr class="even">
+<td align="right">2017</td>
+<td align="left">Male</td>
+<td align="right">0.0121132</td>
+<td align="right">0.1211294</td>
+</tr>
+<tr class="odd">
+<td align="right">2019</td>
+<td align="left">Female</td>
+<td align="right">0.0039233</td>
+<td align="right">0.2257474</td>
+</tr>
+<tr class="even">
+<td align="right">2019</td>
+<td align="left">Male</td>
+<td align="right">0.0106956</td>
+<td align="right">0.1309801</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>knitr::kable(suicide_comparsion_race)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">year</th>
+<th align="left">race</th>
+<th align="right">prob_real_suicide</th>
+<th align="right">prob_contem_suicide</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">1999</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0233937</td>
+<td align="right">0.2374429</td>
+</tr>
+<tr class="even">
+<td align="right">1999</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0047845</td>
+<td align="right">0.1778063</td>
+</tr>
+<tr class="odd">
+<td align="right">1999</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0038193</td>
+<td align="right">0.1632200</td>
+</tr>
+<tr class="even">
+<td align="right">1999</td>
+<td align="left">White</td>
+<td align="right">0.0054585</td>
+<td align="right">0.1821085</td>
+</tr>
+<tr class="odd">
+<td align="right">2001</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0192685</td>
+<td align="right">0.2248139</td>
+</tr>
+<tr class="even">
+<td align="right">2001</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0046368</td>
+<td align="right">0.1676519</td>
+</tr>
+<tr class="odd">
+<td align="right">2001</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0032779</td>
+<td align="right">0.1537429</td>
+</tr>
+<tr class="even">
+<td align="right">2001</td>
+<td align="left">White</td>
+<td align="right">0.0057034</td>
+<td align="right">0.1717597</td>
+</tr>
+<tr class="odd">
+<td align="right">2003</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0169257</td>
+<td align="right">0.2175167</td>
+</tr>
+<tr class="even">
+<td align="right">2003</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0044051</td>
+<td align="right">0.1618227</td>
+</tr>
+<tr class="odd">
+<td align="right">2003</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0029038</td>
+<td align="right">0.1483112</td>
+</tr>
+<tr class="even">
+<td align="right">2003</td>
+<td align="left">White</td>
+<td align="right">0.0052078</td>
+<td align="right">0.1658162</td>
+</tr>
+<tr class="odd">
+<td align="right">2005</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0189530</td>
+<td align="right">0.2089109</td>
+</tr>
+<tr class="even">
+<td align="right">2005</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0034781</td>
+<td align="right">0.1549840</td>
+</tr>
+<tr class="odd">
+<td align="right">2005</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0031924</td>
+<td align="right">0.1419468</td>
+</tr>
+<tr class="even">
+<td align="right">2005</td>
+<td align="left">White</td>
+<td align="right">0.0052876</td>
+<td align="right">0.1588407</td>
+</tr>
+<tr class="odd">
+<td align="right">2007</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0160473</td>
+<td align="right">0.1825607</td>
+</tr>
+<tr class="even">
+<td align="right">2007</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0042022</td>
+<td align="right">0.1342811</td>
+</tr>
+<tr class="odd">
+<td align="right">2007</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0029940</td>
+<td align="right">0.1227324</td>
+</tr>
+<tr class="even">
+<td align="right">2007</td>
+<td align="left">White</td>
+<td align="right">0.0046661</td>
+<td align="right">0.1377065</td>
+</tr>
+<tr class="odd">
+<td align="right">2009</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0200779</td>
+<td align="right">0.1826765</td>
+</tr>
+<tr class="even">
+<td align="right">2009</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0044164</td>
+<td align="right">0.1343713</td>
+</tr>
+<tr class="odd">
+<td align="right">2009</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0032187</td>
+<td align="right">0.1228160</td>
+</tr>
+<tr class="even">
+<td align="right">2009</td>
+<td align="left">White</td>
+<td align="right">0.0054277</td>
+<td align="right">0.1377987</td>
+</tr>
+<tr class="odd">
+<td align="right">2011</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0175064</td>
+<td align="right">0.1818574</td>
+</tr>
+<tr class="even">
+<td align="right">2011</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0045437</td>
+<td align="right">0.1337334</td>
+</tr>
+<tr class="odd">
+<td align="right">2011</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0035801</td>
+<td align="right">0.1222252</td>
+</tr>
+<tr class="even">
+<td align="right">2011</td>
+<td align="left">White</td>
+<td align="right">0.0060224</td>
+<td align="right">0.1371471</td>
+</tr>
+<tr class="odd">
+<td align="right">2013</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0172247</td>
+<td align="right">0.1982604</td>
+</tr>
+<tr class="even">
+<td align="right">2013</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0041962</td>
+<td align="right">0.1465733</td>
+</tr>
+<tr class="odd">
+<td align="right">2013</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0036443</td>
+<td align="right">0.1341313</td>
+</tr>
+<tr class="even">
+<td align="right">2013</td>
+<td align="left">White</td>
+<td align="right">0.0061365</td>
+<td align="right">0.1502579</td>
+</tr>
+<tr class="odd">
+<td align="right">2015</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0224443</td>
+<td align="right">0.2040213</td>
+</tr>
+<tr class="even">
+<td align="right">2015</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0051372</td>
+<td align="right">0.1511154</td>
+</tr>
+<tr class="odd">
+<td align="right">2015</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0043257</td>
+<td align="right">0.1383503</td>
+</tr>
+<tr class="even">
+<td align="right">2015</td>
+<td align="left">White</td>
+<td align="right">0.0070686</td>
+<td align="right">0.1548935</td>
+</tr>
+<tr class="odd">
+<td align="right">2017</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0202931</td>
+<td align="right">0.2124578</td>
+</tr>
+<tr class="even">
+<td align="right">2017</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0066770</td>
+<td align="right">0.1577979</td>
+</tr>
+<tr class="odd">
+<td align="right">2017</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0055161</td>
+<td align="right">0.1445645</td>
+</tr>
+<tr class="even">
+<td align="right">2017</td>
+<td align="left">White</td>
+<td align="right">0.0085799</td>
+<td align="right">0.1617112</td>
+</tr>
+<tr class="odd">
+<td align="right">2019</td>
+<td align="left">American Indian/Alaska Native</td>
+<td align="right">0.0266753</td>
+<td align="right">0.2278373</td>
+</tr>
+<tr class="even">
+<td align="right">2019</td>
+<td align="left">Asian or Pacific Islander</td>
+<td align="right">0.0065430</td>
+<td align="right">0.1700751</td>
+</tr>
+<tr class="odd">
+<td align="right">2019</td>
+<td align="left">Black or African American</td>
+<td align="right">0.0052498</td>
+<td align="right">0.1560028</td>
+</tr>
+<tr class="even">
+<td align="right">2019</td>
+<td align="left">White</td>
+<td align="right">0.0076132</td>
+<td align="right">0.1742299</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>#Now let&#39;s draw a chart to see if there is any relationship between suicide contemplation and real suicide occurrence for Gender and Race
+
+#Gender
+ggplot(suicide_comparsion_sex, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = sex)) + geom_line(aes(y = prob_contem_suicide, color = sex)) + labs(y = &quot;prob&quot;) + annotate(&quot;text&quot;, x = 2003, y = 0.15, label = &quot;predicted suicide contemplation&quot;) + annotate(&quot;text&quot;, x = 2003, y = 0.02, label = &quot;real suicide&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+<pre class="r"><code>#Race
+ggplot(suicide_comparsion_race, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = race)) + geom_line(aes(y = prob_contem_suicide, color = race)) + labs(y = &quot;prob&quot;) + annotate(&quot;text&quot;, x = 2010, y = 0.22, label = &quot;predicted suicide contemplation&quot;) + annotate(&quot;text&quot;, x = 2003, y = 0.04, label = &quot;real suicide&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-9-2.png" width="672" />
+Observations:</p>
+<p>For gender chart showed above, we surprisingly find that male has a lower probability to declare themselves has suicide contemplation while male’s real suicide probability is higher. This is probability caused by the fact that female is more inclined to share their real thoughts and more easier to get emotional, while male is not very willing to told their suicide contemplation but they have indeed. For race chart showed above, we find that the probability is similar for predicted suicide contemplation and real suicide probability.</p>
+<p>There are limitations for these comparison as the datasets are not same, meaning that the population is not exactly the same. Furthermore, for predictor ‘gender’ , our previous dataset have categories “&lt;12” and “18+” while the new dataset has information for each age group. Hence, to minimize the impact of this differences and considering the fact that the original dataset only interviews middle and high-school students, we include age from a range of 11 to 19 in the new dataset. Also, for predictor ‘race’, previous dataset includes Hispanic and non-Hispanic in the race while the second dataset add a new columns indicating the Hispanic-status. To solve this issue, we exclude those Hispanic and non-Hispanic races in previous dataset to keep consistent for both datasets.</p>
+</div>

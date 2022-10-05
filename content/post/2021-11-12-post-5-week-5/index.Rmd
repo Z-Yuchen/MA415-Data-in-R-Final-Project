@@ -1,0 +1,96 @@
+---
+title: Initial Model Building
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-11-12'
+slug: []
+categories: []
+tags: []
+description: Model Building
+toc: yes
+authors: []
+series: []
+lastmod: '2021-11-05T08:46:26+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Model Building
+
+We first loaded tidyverse and loaded the processed dataset.
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+```{r message=FALSE, warning=FALSE}
+# load the cleaned data from last time
+data <- read_csv('data/processed_data_2019.csv')
+```
+<br>
+
+Building a model for predicting probablity of considering suicide during the past 12 months. First, as we think age and race may plays a large role in affecting the teenager's suicide probablity, we use age and race as our predictor 
+
+<br>
+
+```{r}
+predict_suicide <- data %>% select(race,age,serious_consideration_suicide) 
+predict_suicide_model_inital <- glm(serious_consideration_suicide ~ age + race, data = predict_suicide, family = binomial)
+summary(predict_suicide_model_inital)
+```
+
+<br>
+
+Based on the table of coefficients, we can see that the majority of the p values for the age category is not significant, with only the category of 18+ having a significant p-value. Hence, we decided to remove the age category from our model. For the race category, only the category of non-hispanic race has a p-value that is not significant. To avoid the stuation if non-hispanic has a large percent in our data, we draw a pie chart to see the distribution of race.
+
+<br>
+
+```{r}
+# Pie chart showing the distribution of race
+predict_suicide %>% select(race) %>% count(race) %>% mutate(prep = n /sum(n)) %>% arrange(prep) %>% mutate(labels = scales::percent(prep)) %>% ggplot(aes(x="", y=prep, fill= race)) +
+  geom_bar(stat="identity", width=1) +  geom_text(aes(label = labels, fontface = "bold"),
+            size = 3, colour = 'white', position = position_stack(vjust = 0.5)) +
+            coord_polar("y", start=0) + theme_void() 
+```
+
+<br>
+
+The pie chart shows that non-hispanic race only consists of 5 percent of the data. In other words, around 95% data has a race that is statistically significant. Therefore, we decide to keep race in our model. 
+Then, we are considering adding other features into model. This time, we add other two feature: sex and Weights_status, and we found these two factors are all statistically significant.
+
+<br>
+
+```{r}
+
+predict_suicide <- data %>% select(sex,race,Weight_status,serious_consideration_suicide)
+predict_suicide_model_final <- glm(serious_consideration_suicide ~ sex + race + Weight_status, data = predict_suicide, family = binomial)
+summary(predict_suicide_model_final)
+```
+
+<br>
+
+Now, let's make a table showing the predictions for suicide probability!
+
+<br>
+
+```{r}
+# get the coefficient 
+(suicide_coef <- coef(predict_suicide_model_final))
+```
+```{r}
+# do the prediction using the logistic regression model we just built
+suicide_predictions <- predict_suicide %>% modelr::data_grid(sex,race,Weight_status) %>% modelr::add_predictions(predict_suicide_model_final) %>% mutate(prob_suicide = 1- exp(pred)/(1+exp(pred))) %>% select(!pred) %>% arrange(desc(prob_suicide))
+
+#rename sex variable for an easy understanding in table
+suicide_predictions$sex[suicide_predictions$sex == 0] <- 'Female' #Female
+suicide_predictions$sex[suicide_predictions$sex == 1] <- 'Male' #Male
+
+knitr::kable(suicide_predictions)
+```
+
+<br>
+
+From the table, we can see that our model predict that the highest probability for considering suicide during the past 12 months are Female American Indian/Alaska Native with a Weight_status 'obesity'. This group of people has a probability for considering suicide to nearly 35%. Also, we find that female generally has a higher probability for considering suicide during the past 12 months. Fruthermore,people with weight status of obesity generally has a higher probability for considering suicide compare with other weight status.

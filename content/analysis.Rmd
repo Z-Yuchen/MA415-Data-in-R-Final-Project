@@ -1,0 +1,745 @@
+---
+title: Exploratory Data Analysis
+description:
+toc: true
+featuredVideo:
+featuredImage: https://cdn.activestate.com/wp-content/uploads/2019/08/exploratory-data-analysis-using-python-blog-hero.jpg
+draft: false
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+<br>
+
+## What do we care about?
+
+Suicide is a real problem worldwide: in the present time, approximately 130 Americans commit suicide every day, says the SAVE (n.d.). In addition, in Switzerland, people are even getting assisted in suicide actions and there might even be “Suicide pods that provide a ‘painless death’ soon (i24News 2021). Who knows if this will be a trend in the U.S. in the near future?
+
+Suicide problems as a whole attract us, and we wondered if we can figure out the attributes as well as people’s different behaviors that may cause them to consider committing suicide. However, as we are all college students, we decided to look at suicide problems among people around our ages. Hence, comes our selection of the youth risk behavior dataset, which contains suicide consideration as a survey question with an age ranged from “younger than 12” to “older than 18”.
+
+The dependent variable that we are interested in is, of course, serious_consideration_suicide, which takes binary value of yes or no to a question asking the surveyed about whether they have considered committing suicide seriously. Other variables that we are interested in are sex, and many other health risk behaviors that are introduced in the Data section of this project. The reason we are interested in those is that we wanted to find out what kind of health risk behaviors can contribute to consideration of suicide.
+
+However, there are also some limitations of our analysis based on those variables. One of them is that the dataset mainly focused on individuals that are older than 11-year-old and younger than 19-year-old (12-18), we cannot use our model to predict adults’ or children’s possibility of considering suicide in the U.S. In addition, since the dataset takes answers from a survey based on multiple choices, we do not have many numerical values, and hence our model used many dummy variables.
+
+<br>
+
+## Initial Data Analysis
+
+During our initial phase of analysis, we were not sure what independent variables should be chosen so we first explored our data by plotting serious_consideration_suicide against age, sex, race, and weight status. Basically, we tried to see if physical status may already show strong trend with suicide considerations. To ease our work load, we first decided to only look at year 2019.
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(modelr)
+library(ROCR)
+library(data.table)
+library(formattable)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+get(load("processed_data.RData"))
+data_2019 <- processed_data %>% filter(year==2019)
+```
+
+```{r message=FALSE, warning=FALSE}
+predict_suicide <- data_2019 %>% 
+  select(race,age,sex,,Weight_status,serious_consideration_suicide) 
+predict_suicide_model_inital <- glm(serious_consideration_suicide ~ age + 
+                                      race + sex+ Weight_status, 
+                                    data = predict_suicide, family = binomial)
+summary(predict_suicide_model_inital)
+```
+
+<br>
+The result of our preliminary exploration is surprising: we first thought that age would be a very important predictor, yet as the model above shows, none of the dummy variables for age was significant enough. However, we soon discovered that this could be explained by the graph below:
+
+<br>
+
+```{r}
+data <- data_2019 %>% drop_na(serious_consideration_suicide, sex, race, Weight_status) 
+
+a <- data %>% ggplot(aes(age)) + 
+  geom_bar(aes(fill = as.character(serious_consideration_suicide)),
+  position = "fill") + labs(x = 'Age', y = 'Prop',fill = "Suicide_Consideration") + coord_flip()
+b <- data %>% ggplot(aes(age)) + 
+  geom_bar(aes(fill = as.character(Weight_status)),
+  position = "fill") + labs(x = 'Age', y = 'Prop',fill = "Weight_status") + coord_flip()
+c <- data %>% ggplot(aes(age)) + 
+  geom_bar(aes(fill = as.character(sex)),
+  position = "fill") + labs(x = 'Age', y = 'Prop',fill = "sex") + coord_flip()
+
+ggarrange(a, b, c, ncol = 2, nrow = 2)
+
+data %>% ggplot(aes(age)) + 
+  geom_bar(aes(fill = as.character(race)),
+  position = "fill") + labs(x = 'Age', y = 'Prop',fill = "race") + coord_flip()
+```
+
+<br>
+
+This is a graph that shows the proportion of people who have considered committing suicide across different age groups. The graph clearly shows that the distribution for the consideration and age seem to be universal. We also plotted age and other variables such as Weight_status and race, and the results were similar: there does not seem to have a significant effect between each dependent variable and age across different age groups. Hence age is permantly excluded from our dataset for model analysis purposes. We may still use it for graph generating and interactives.
+
+Again, from the model before, we noticed that race seem to play an important role in prediction. Furthermore, we wanted to first make a model for minorities in the U.S. in order to see what variables actually affect their consideration for suicide. For this step, we used 4 races instead of using 7 races (combined together American Indian/Alaska Native, Asian, Native Hawaiian/Other Pacific Islander, and Multiple Races). This is to make sure the sample size is big enough, as shown below:
+
+<br>
+
+```{r}
+processed_data %>% count(race4) %>% drop_na(race4) %>% 
+  mutate(perc = n / sum(n)) %>% mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="", y=n, fill= race4))+geom_bar(stat="identity", width=1) + 
+  geom_text(aes(label = labels),
+  position = position_stack(vjust = 0.5), size = 5, colour = 'white') +
+  coord_polar("y", start=0) + theme_void() + labs(fill="Race")
+```
+
+<br>
+As shown on the graph, white population takes up almost 60% of the data, while Hispanic/Latino population takes up 15.4%, Black/African American population takes up almost 14%. Then all the other races combined just takes up 12.1% of the data. This trend is consistent with what has been shown on Wikipedia. Hence, we decided to continue by combining all other 4 races into a big minority race group.
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+suicide_data_overview <- processed_data %>% 
+  drop_na(c(serious_consideration_suicide,attempt_suicide,race4,plan_suicide)) %>% 
+  select(year, race4, serious_consideration_suicide,attempt_suicide,plan_suicide) %>% 
+  group_by(year,race4) %>% summarise(prob_consider = sum(serious_consideration_suicide)/n(),
+                                     prob_plan = sum(plan_suicide)/n(), prob_attempt = sum(attempt_suicide)/n())
+a <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_consider, color = race4)) +
+  labs(title="Probability of suicide consideration, plan, and attempt",color = "Race")
+b <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_plan,color = race4))+labs(color = "Race")
+c <- ggplot(suicide_data_overview, aes(x = year))+ 
+  geom_line(aes(y = prob_attempt,color = race4))+labs(color = "Race")
+ggarrange(a, b, c, ncol = 1, nrow = 3)
+```
+
+<br>
+
+The graph above shows that all other Races (the red line) overall seem to have higher chance for suicide consideration, planning, and attempting. Hence, this shows that our interest of minority might be a good one to look at.
+
+<br>
+
+## Modeling
+
+<br>
+
+```{r}
+minority <- processed_data %>% filter(race4 == "All Other Races")
+head(minority,5)
+```
+
+<br>
+
+This step is to create the sub-dataset for minority population for exploration.
+
+<br>
+```{r}
+#create a dataframe record cross-validation results
+df <- data.frame(matrix(ncol=5,nrow=0, dimnames=list(NULL, c("Model","Train_Test_split","TrainingSet", "TestingSet", "AUC"))))
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+set.seed(1)
+minority <- minority %>% drop_na()
+minority_unShuffled <- minority
+minor <- minority_unShuffled[sample(nrow(minority_unShuffled)),]
+
+#training and testing for minority 50/50
+minor_Train <- minor[1:12890,] #50%
+minor_Test <- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("Minority","50/50","1:12890","12891:25780",auc)
+detach(minor_Train)
+```
+
+```{r include=FALSE}
+#training and testing for minority 50/50
+minor_Test <- minor[1:12890,] #50%
+minor_Train <- minor[12891:25780,] #50%
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("Minority","50/50","12891:25780","1:12890",auc)
+detach(minor_Train)
+```
+
+```{r include=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor1,minor2)
+minor_Test <- minor3
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("Minority","67/33","1:17187","17188:25780",auc)
+detach(minor_Train)
+```
+
+```{r include=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor1,minor3)
+minor_Test <- minor2
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("Minority","67/33","1:8593 & 17188:25780","8594:17187",auc)
+detach(minor_Train)
+```
+
+```{r include=FALSE}
+#training and testing for minority 67/33
+minor1 <- minor[1:8593,]
+minor2 <- minor[8594:17187,]
+minor3 <- minor[17188:25780,]
+
+minor_Train <- rbind(minor2,minor3)
+minor_Test <- minor1
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = minor_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("Minority","67/33","8594:25780","1:8593",auc)
+detach(minor_Train)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+set.seed(1)
+processed_data <- processed_data %>% drop_na()
+processed_data_unShuffled <- processed_data
+whole <- processed_data_unShuffled[sample(nrow(processed_data_unShuffled)),]
+
+#training and testing for wholeity 50/50
+whole_Train <- whole[1:137263,] #50%
+whole_Test <- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("All_Race","50/50","1:137263","137264:274527",auc)
+detach(whole_Train)
+```
+
+```{r include=FALSE}
+#training and testing for wholeity 50/50
+whole_Test <- whole[1:137263,] #50%
+whole_Train <- whole[137264:274527,] #50%
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("All_Race","50/50","137264:274527","1:137263",auc)
+detach(whole_Train)
+```
+
+```{r include=FALSE}
+#training and testing for wholeity 67/33
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole2)
+whole_Test <- whole3
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("All_Race","67/33","1:91509","91510:274527",auc)
+detach(whole_Train)
+```
+
+```{r include=FALSE}
+#training and testing for wholeity 67/33
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole3)
+whole_Test <- whole2
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("All_Race","67/33","1:91509 & 183019:274527","91510:183018",auc)
+detach(whole_Train)
+```
+
+```{r include=FALSE}
+#training and testing for wholeity 67/33
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole2,whole3)
+whole_Test <- whole1
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + Weight_status + weapon_carrying + weapon_carrying_at_school + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + num_cigarette_per_day + total_num_get_high + total_num_needle_for_drug + has_got_drug_at_school, method = "forward", data = whole_Train, nvmax =10)
+summary(leaps_f)$which
+
+summary(leaps_f)$cp
+(b <- which.min(summary(leaps_f)$cp))
+(colnames(summary(leaps_f)$which)[summary(leaps_f)$which[b,]])
+
+train_model_new <- glm(serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school, family = binomial)
+
+summary(train_model_new)
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+df[nrow(df) + 1,] = c("All_Race","67/33","91510:274527","1:91509",auc)
+detach(whole_Train)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+df %>% mutate(AUC = as.numeric(AUC)) %>% 
+  mutate_if(is.numeric, round, digits = 3) %>% 
+  formattable(list(`AUC`= color_tile("#DeF7E9","#71CA97")))
+```
+```{r message=FALSE, warning=FALSE}
+attach(mtcars)
+par(mfrow=c(1,2))
+
+prob <- predict(train_model_new, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf, main="ROC curve for Minority Model")
+
+prob <- predict(train_model_new, newdata = whole_Test, type = "response")
+pred <- prediction(prob, whole_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf, main="ROC curve for All_Race Model")
+```
+
+<br>
+
+Based on our forward model selection, we have obtained our models and AUC values. Based on the AUC values we got from cross validations (full steps are posted after Bibliography section), we choose the third model from Minority dataset and the fourth model from All_Race dataset.
+
+<br>
+
+For the Minority dataset, the model has an AUC value of 0.728, and the model is: serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + first_time_drinking + total_num_get_high + has_got_drug_at_school
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+# Minority Model
+minor_Train <- minor[1:17187,]
+minor_Test <- minor[17188:25780,]
+
+attach(minor_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + 
+                               weapon_carrying + weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + 
+                               num_cigarette_per_day + 
+                               total_num_get_high + 
+                               total_num_needle_for_drug + 
+                               has_got_drug_at_school, 
+                             method = "forward", data = minor_Train, nvmax =10)
+
+Final_minor_model <- glm(serious_consideration_suicide ~ sex + weapon_carrying + 
+                           safety_concerns_at_school + Threatened_at_school + 
+                           first_time_drinking + total_num_get_high + 
+                           has_got_drug_at_school, family = binomial)
+
+summary(Final_minor_model)
+detach(minor_Train)
+```
+
+<br>
+
+For the All_Race dataset, the model has an AUC value of 0.722, and the model is: 
+serious_consideration_suicide ~ sex + weapon_carrying + safety_concerns_at_school + Threatened_at_school + total_num_methamphetamines + first_time_drinking + total_num_get_high + has_got_drug_at_school
+
+<br>
+
+```{r message=FALSE, warning=FALSE}
+# All_Race Model
+whole1 <- whole[1:91509,]
+whole2 <- whole[91510:183018,]
+whole3 <- whole[183019:274527,]
+
+whole_Train <- rbind(whole1,whole3)
+whole_Test <- whole2
+
+attach(whole_Train)
+
+leaps_f <- leaps::regsubsets(serious_consideration_suicide ~ sex + 
+                               Weight_status + weapon_carrying + 
+                               weapon_carrying_at_school + 
+                               safety_concerns_at_school + 
+                               Threatened_at_school + 
+                               total_num_methamphetamines + 
+                               first_time_drinking + 
+                               num_cigarette_per_day + 
+                               total_num_get_high + 
+                               total_num_needle_for_drug + 
+                               has_got_drug_at_school, 
+                             method = "forward", data = whole_Train, nvmax =10)
+
+Final_whole_model <- glm(serious_consideration_suicide ~ sex + 
+                           weapon_carrying + 
+                           safety_concerns_at_school + 
+                           Threatened_at_school +
+                           total_num_methamphetamines + 
+                           first_time_drinking + 
+                           total_num_get_high + 
+                           has_got_drug_at_school, family = binomial)
+
+summary(Final_whole_model)
+
+detach(whole_Train)
+```
+
+<br>
+
+Based on the result from forward selection and cross-validation, All_Race model has one more variable than Minority model. The variable, though named as total_num_methamphetamines, is a categorical variable that indicates whether the individual ever had used methamphetamines - if he/she had used even once, we considered he/she had used it.
+
+<br>
+
+```{r}
+# Minority Model
+Final_model_coef <- coef(Final_minor_model)
+Predict_Probs <- matrix(1:8, nrow = 8, 
+                    dimnames = list(c("If a teenager is Male",
+                  "If a teenager carrying weapon during past days",
+                  "If a teenager feel unsafe at School", 
+                  "If a teenager are threatened by weapons on campus", 
+                  "If a teenager drank after age 13 for the first time", 
+                  "If a teenager have never drink alcohol yet",
+                  "If a teenager got high by taking drugs",
+                  "If a teenager had got drugs / got drug offerings at school"), c("Probability_considering_suicide_change_by_in_percentage")))
+for (i in 1:8) {
+    Predict_Probs[i] <- ((exp(Final_model_coef[i+1]) / 
+                            (1+exp(Final_model_coef[i+1])) - 
+                            exp(0)/(1+exp(0)))*100)
+    i <- i+1
+}
+
+#All_race model
+Final_whole_model_coef <- coef(Final_whole_model)
+Predict_Probs_whole <- matrix(2:9, nrow = 9, 
+                    dimnames = list(c("If a teenager is Male",
+                  "If a teenager carrying weapon during past days",
+                  "If a teenager feel unsafe at School", 
+                  "If a teenager are threatened by weapons on campus",
+                  "If a teenager tried methamphetamines",
+                  "If a teenager drank after age 13 for the first time", 
+                  "If a teenager have never drink alcohol yet",
+                  "If a teenager got high by taking drugs",
+                  "If a teenager had got drugs / got drug offerings at school"), c("Probability_considering_suicide_change_by_in_percentage")))
+for (i in 1:9) {
+    Predict_Probs_whole[i] <- ((exp(Final_whole_model_coef[i+1]) / 
+                                  (1+exp(Final_whole_model_coef[i+1])) - 
+                                  exp(0)/(1+exp(0)))*100)
+    i <- i+1
+}
+
+#build dataframe for both model and connect them together
+merged_table <- merge(as.data.frame.matrix(Predict_Probs),
+                      as.data.frame.matrix(Predict_Probs_whole),
+                      by = "row.names", all = TRUE)%>%  arrange(desc(Probability_considering_suicide_change_by_in_percentage.y)) %>% 
+mutate(difference = Probability_considering_suicide_change_by_in_percentage.x - Probability_considering_suicide_change_by_in_percentage.y)
+
+colnames(merged_table) <- c('Health Risk Behaviors',
+                            'Minority',
+                            'All_Race',
+                            'Difference')
+
+round_df <- function(df, digits) {
+  nums <- vapply(df, is.numeric, FUN.VALUE = logical(1))
+
+  df[,nums] <- round(df[,nums], digits = digits)
+
+  (df)
+}
+
+merged_table <- round_df(merged_table, digits=3)
+
+merged_table$Minority[is.na(merged_table$Minority)]<-"N/A"
+merged_table$Difference[is.na(merged_table$Difference)]<-0
+
+merged_table %>% formattable(list( Minority = color_tile("#D4FEC6","#FEC6C6"),
+                            All_Race = color_tile("#D4FEC6","#FEC6C6"), 
+                            Difference = formatter("span",
+                              style = ~ style(color = ifelse(`Difference` > 0, 
+                          "green", ifelse(`Difference` == 0, "black", "red"))),~
+                           icontext(sapply(`Difference`, function(x) if (x < 0) 
+                             "arrow-down" else if (x> 0) "arrow-up" 
+                             else if (x == 0) "" else ""), `Difference`))))
+```
+### Above Table:  Change in probability of suicide consideration due to various health risk behaviors
+
+
+<br>
+
+Interestingly, according to the above chart, whether the young individual is a male or female plays an important role in predicting whether he/she might have serious consideration for suicide. Holding all other variables as default, being a male is 20 percent less likely to declare that he had serious consideration to suicide. In addition, another interesting fact is that never drink alcohol and drink alcohol after age 13 can be useful for helping to decrease the possibility for suicide consideration. In other words, teenagers who start to drink alcohol after age 13 have a higher rate of suicide consideration. For the leading factors that cause youth suicide, we find that ‘taking drugs and got high’, ‘being threatened by weapons on campus’, and ‘feeling unsafe at school’ are three main contributors to increase the possibility of considering suicide. This makes sense as all of these may bring tremendous stress to students on campus and may drive them to consider suicide, if they cannot restore their mental health on time. Furthermore, as the factor methamphetamine is not shown in the minority model, this indicates that methamphetamine usage is more correlated with suicide consideration for races such as White, Black and Latino rather than Minority.
+
+<br>
+
+As we just mentioned above that if a teenager is male, then this person’s predicted probability of considering suicide decreases by 20 percent. This finding motivates us to delve deeper. We are interested in this difference and decide to see whether the real suicide correlates with the results of the model. To do so, we combined the NCHS dataset (previously mentioned in the data section), which consists of real suicide death data, with our original dataset. We clean and merged two datasets to calculate the ratio between suicide death and suicide consideration from 1999 to 2019.
+
+<br>
+To do so, our first step is to create a table for false positive rate and true positive rate in ROC curve.
+
+```{r}
+# draw table for threshold, fpr, and tpr for finding the optimal threshold
+prob <- predict(Final_minor_model, newdata = minor_Test, type = "response")
+pred <- prediction(prob, minor_Test$serious_consideration_suicide) 
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+cutoffs <- data.frame(threshold=perf@alpha.values[[1]], fpr=perf@x.values[[1]], 
+                      tpr=perf@y.values[[1]])
+head(cutoffs,5)
+```
+
+<br>
+Then, We used Geometric_Mean method to find the optimal threshold for classification.
+
+```{r}
+cutoffs <- cutoffs %>%  mutate(Geometric_Mean = sqrt(tpr * (1-fpr))) %>% 
+  arrange(desc(Geometric_Mean)) 
+Optimal_threshold = cutoffs$threshold[1]
+```
+
+<br>
+Then, we used the optimal threshold to classify the suicide consideration using the probability we get from our ALL_Race model.
+
+```{r}
+classified_minor <- processed_data %>% filter(race4 == "All Other Races") %>% drop_na(c(year,sitename,sex,serious_consideration_suicide,sex,weapon_carrying, 
+          safety_concerns_at_school,Threatened_at_school,first_time_drinking,
+          total_num_get_high,has_got_drug_at_school)) %>%
+  modelr::add_predictions(train_model_new) %>% 
+  mutate(prob_suicide_cont = exp(pred)/(1+exp(pred))) %>% 
+  mutate(classified_suicide_cont = ifelse(
+    prob_suicide_cont >= Optimal_threshold,1, 0)) %>% select(!c(pred,grade,seat_belt_use,riding_with_a_drinking_driver,
+          weapon_carrying_at_school,Physical_fighting,
+          Physical_fighting_at_school,'feel_hopeless_2+weeks',
+          freq_smoking_cigarette,num_cigarette_per_day,freq_smoking_cigar,
+          freq_drinking,total_num_marijuana,first_time_marijuana,
+          total_num_cocaine,total_num_heroin,total_num_methamphetamines,
+          total_num_needle_for_drug,Weight_status)) 
+```
+
+<br>
+Now, let's combine and merge two dataset and also draw the ratio chart.
+
+```{r}
+real_suicide <- fread("suicide.txt")
+
+processed_suicide <- real_suicide %>% select(Year, Race, Gender,
+                                `Single-Year Ages Code`,Deaths,Population) %>% 
+  filter(`Single-Year Ages Code` <= 19 & `Single-Year Ages Code` >= 11) 
+
+# fill na with 0 for further calculation
+processed_suicide$Population = 
+  as.numeric(as.character(processed_suicide$Population))
+
+processed_suicide[is.na(processed_suicide)] <- 0
+
+# Create a table for real suicide occurrence for gender in each year
+suicide_gender_A <- processed_suicide %>% group_by(Year,Gender) %>% 
+  summarise(Deaths = sum(Deaths))
+suicide_gender_B <- processed_suicide %>% group_by(Year,Gender) %>% 
+  summarise(Population = sum(Population))
+suicide_gender <- left_join(suicide_gender_A, suicide_gender_B, 
+                            by = c("Year","Gender")) %>% 
+  mutate(prob_real_suicide = Deaths/Population * 100) %>% 
+  select(Year, Gender, prob_real_suicide)
+
+#rename columns name
+names(suicide_gender)[names(suicide_gender) == 'Year'] <- "year"
+names(suicide_gender)[names(suicide_gender) == 'Gender'] <- "sex"
+
+predicted_suicide <- classified_minor %>% group_by(year,sex) %>% 
+  summarise(prob_suicide_cont = sum(classified_suicide_cont)/n())
+suicide_comparsion_sex <- left_join(suicide_gender,predicted_suicide, 
+                                    by = c("year","sex")) %>% 
+  drop_na(prob_suicide_cont) %>%
+  mutate(ratio_real_to_cont = prob_real_suicide/prob_suicide_cont)
+ggplot(suicide_comparsion_sex, 
+       aes(x = year, y = ratio_real_to_cont,color = sex)) + 
+       geom_line() + labs(y = "Real / Consideration suicide Ratio")
+
+```
+
+<br>
+
+Surprisingly, based on the above chart, we find that male has a significantly higher ratio compare to female. In other words, if a male and female declare they both have suicidal thoughts, then the male will be more likely to attempt suicide and cause death. This makes sense as female is more inclined to share their real thoughts and easier to get emotional, while the male is not very willing to tell their suicidal thoughts if they already decided to attempt the suicide.
+
+<br>
+
+## Bibliography
+
+i24News, Switzerland: Suicide pods provide a 'painless death', Dec 15, 2021., https://www.i24news.tv/en/news/international/europe/1639565590-switzerland-suicide-pods-being-developed-for-a-painless-death)
+
+<br>
+
+Image from: https://cdn.activestate.com/wp-content/uploads/2019/08/exploratory-data-analysis-using-python-blog-hero.jpg
+
+<br>
+
+SAVE: Suicide Prevention, Information, and Awareness, n.d., (https://save.org/about-suicide/suicide-facts/)
+
+<br>
+
+Wikipedia, Race and ethnicity in the United States, https://en.wikipedia.org/wiki/Race_and_ethnicity_in_the_United_States

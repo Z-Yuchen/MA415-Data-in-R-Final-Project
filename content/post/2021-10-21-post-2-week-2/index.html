@@ -1,0 +1,226 @@
+---
+title: Initial Load and Clean Data
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-10-21'
+slug: []
+categories: []
+tags: []
+description: This is how we decided to load and clear data.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-10-21T09:12:59+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="how-we-loaded-and-cleaned-data-data-explore" class="section level2">
+<h2>How We Loaded and Cleaned Data + Data Explore</h2>
+<div id="loading" class="section level3">
+<h3>Loading:</h3>
+<p>The dataset we finally chose was the first dataset proposed in post one. It is a YRBS(Youth Risk Behavior Surveillance System) dataset from CDC. It is a survey-based research that monitors six major categories of health-related behaviors that contribute to the leading causes of death and disability among youth and adults. The main goal of this dataset is to provide researchers, policymakers, and public health officials with data to identify trends in risky behavior over time among youth and to aid public health planning and policymaking. This dataset was collected through one-time national surveys and ongoing surveys collected from middle school students. It has multiple columns of parameters either numerical and categorical. We downloaded the data from the CDC website in the form of Access. Then using Access which is a microsoft software to convert the data file into CSV format. The button is external dataset and then selects CSV format. To put CSV into R, we used the read.csv() function in the tidyverse package.</p>
+<p><br></p>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## -- Attaching packages --------------------------------------- tidyverse 1.3.1 --</code></pre>
+<pre><code>## v ggplot2 3.3.3     v purrr   0.3.4
+## v tibble  3.1.0     v dplyr   1.0.5
+## v tidyr   1.1.3     v stringr 1.4.0
+## v readr   1.4.0     v forcats 0.5.1</code></pre>
+<pre><code>## -- Conflicts ------------------------------------------ tidyverse_conflicts() --
+## x dplyr::filter() masks stats::filter()
+## x dplyr::lag()    masks stats::lag()</code></pre>
+<pre class="r"><code>raw_data &lt;- read_csv(&#39;data/test.csv&#39;)</code></pre>
+<pre><code>## 
+## -- Column specification --------------------------------------------------------
+## cols(
+##   .default = col_double(),
+##   site = col_character(),
+##   orig_rec = col_logical(),
+##   q5 = col_character()
+## )
+## i Use `spec()` for the full column specifications.</code></pre>
+<p><br></p>
+</div>
+<div id="cleaning" class="section level3">
+<h3>Cleaning:</h3>
+<pre class="r"><code>Missing_value_overview &lt;- raw_data %&gt;% summarise_all(funs(sum(is.na(.))))
+Discard_variable &lt;- as.data.frame(t(as.matrix(Missing_value_overview))) %&gt;% filter(V1 &gt; 13677 * 0.3)</code></pre>
+<pre class="r"><code>Discard_variable &lt;- as.data.frame(t(as.matrix(Discard_variable)))
+Discard_variable &lt;- Discard_variable%&gt;%
+  rename(&quot;drunk driving&quot; = qn10, &quot;texting while driving&quot; = qn11, &quot;forced sex while dating&quot; = qn21, &quot;phisically hurt while dating&quot; = qn22, &quot;suicide injury&quot; = qn29, &quot;num of cigarette&quot; = qn33, &quot;access to vapor&quot; = qn36, &quot;quit smoking&quot; = qn39, &quot;max num of alcohol in a roll&quot; = qn43, &quot;access to alcohol&quot; = qn44, &quot;times of steroids without prescription&quot; = qn55, &quot;alcohol/drug before sex&quot; = qn62, &quot;condom used last sex&quot; = qn63, &quot;pregnancy prevention&quot; = qn64, &quot;amount of milk per day&quot; = qn76, &quot;num of paying for medicine without prescription&quot; = qn90, &quot;num of hallucinogenic drugs&quot; = qn91, &quot;food alergy&quot; = qn94, &quot;muscle strenthen&quot; = qn95, &quot;indoor tanning device usage&quot; = qn96, &quot;sunscreen frequency&quot; = qn97, &quot;difficulties caused by truama&quot; = qn98, &quot;english proficiency&quot; = qn99, &quot;iud or implant device usage&quot; = qniudimp, &quot;birth control pills usage&quot; = qnothhpl, &quot;ways of birth control&quot; = qndualbc, &quot;no pregnancy prevention&quot; = qnbcnone, &quot;drink one+ glass milk per day&quot; = qnmilk1, &quot;drink three+glass milk per day&quot; = qnmilk3)
+Discard_variable &lt;- as.data.frame(t(as.matrix(Discard_variable)))
+knitr::kable(Discard_variable)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="right">V1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">orig_rec</td>
+<td align="right">13677</td>
+</tr>
+<tr class="even">
+<td align="left">drunk driving</td>
+<td align="right">6240</td>
+</tr>
+<tr class="odd">
+<td align="left">texting while driving</td>
+<td align="right">6440</td>
+</tr>
+<tr class="even">
+<td align="left">forced sex while dating</td>
+<td align="right">6830</td>
+</tr>
+<tr class="odd">
+<td align="left">phisically hurt while dating</td>
+<td align="right">4974</td>
+</tr>
+<tr class="even">
+<td align="left">suicide injury</td>
+<td align="right">4928</td>
+</tr>
+<tr class="odd">
+<td align="left">num of cigarette</td>
+<td align="right">13108</td>
+</tr>
+<tr class="even">
+<td align="left">access to vapor</td>
+<td align="right">10351</td>
+</tr>
+<tr class="odd">
+<td align="left">quit smoking</td>
+<td align="right">11088</td>
+</tr>
+<tr class="even">
+<td align="left">max num of alcohol in a roll</td>
+<td align="right">4782</td>
+</tr>
+<tr class="odd">
+<td align="left">access to alcohol</td>
+<td align="right">10795</td>
+</tr>
+<tr class="even">
+<td align="left">times of steroids without prescription</td>
+<td align="right">4628</td>
+</tr>
+<tr class="odd">
+<td align="left">alcohol/drug before sex</td>
+<td align="right">10541</td>
+</tr>
+<tr class="even">
+<td align="left">condom used last sex</td>
+<td align="right">10536</td>
+</tr>
+<tr class="odd">
+<td align="left">pregnancy prevention</td>
+<td align="right">10629</td>
+</tr>
+<tr class="even">
+<td align="left">amount of milk per day</td>
+<td align="right">4188</td>
+</tr>
+<tr class="odd">
+<td align="left">num of paying for medicine without prescription</td>
+<td align="right">5000</td>
+</tr>
+<tr class="even">
+<td align="left">num of hallucinogenic drugs</td>
+<td align="right">4113</td>
+</tr>
+<tr class="odd">
+<td align="left">food alergy</td>
+<td align="right">5288</td>
+</tr>
+<tr class="even">
+<td align="left">muscle strenthen</td>
+<td align="right">5203</td>
+</tr>
+<tr class="odd">
+<td align="left">indoor tanning device usage</td>
+<td align="right">5287</td>
+</tr>
+<tr class="even">
+<td align="left">sunscreen frequency</td>
+<td align="right">4865</td>
+</tr>
+<tr class="odd">
+<td align="left">difficulties caused by truama</td>
+<td align="right">5237</td>
+</tr>
+<tr class="even">
+<td align="left">english proficiency</td>
+<td align="right">5289</td>
+</tr>
+<tr class="odd">
+<td align="left">iud or implant device usage</td>
+<td align="right">10629</td>
+</tr>
+<tr class="even">
+<td align="left">birth control pills usage</td>
+<td align="right">10629</td>
+</tr>
+<tr class="odd">
+<td align="left">ways of birth control</td>
+<td align="right">10652</td>
+</tr>
+<tr class="even">
+<td align="left">no pregnancy prevention</td>
+<td align="right">10629</td>
+</tr>
+<tr class="odd">
+<td align="left">drink one+ glass milk per day</td>
+<td align="right">4188</td>
+</tr>
+<tr class="even">
+<td align="left">drink three+glass milk per day</td>
+<td align="right">4188</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p>We delete variables with missing values consisting larger than 30% of all observations. In other words, since our total respondents are 13677, we discard variables with missing values that are larger than 13677 * 0.3 = 4103. As the chart shows, 30 variables are discarded.</p>
+<p><br></p>
+</div>
+<div id="exploring" class="section level3">
+<h3>Exploring:</h3>
+<p>We decide our first research questions: how does age and BMI together affect health conditions?</p>
+<pre class="r"><code>raw_data  %&gt;% drop_na(q1,qn50,BMIPCT) %&gt;% 
+  unite(age_cocaine, q1,qn50) %&gt;% 
+  ggplot(aes(x = factor(age_cocaine), y = BMIPCT)) + 
+  geom_boxplot() + 
+  labs(x = &quot;age_cocaine&quot;)+scale_x_discrete(guide = guide_axis(n.dodge=2))</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p><br>
+In this graph, it is clear that age and whether they take cocaine does not affect BMI across each age group greatly, except age under group 1 (under 12 years old) and 2 (13 years old).</p>
+<p><br></p>
+<p>Another two graphs we made is by doing the following:</p>
+<pre class="r"><code>raw_data  %&gt;%  drop_na(q1) %&gt;%  ggplot(aes(x = q1)) + geom_bar() + labs(x = &#39;Age&#39;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<pre class="r"><code>raw_data$qn50[raw_data$qn50 == 1] &lt;- &quot;Yes&quot;
+raw_data$qn50[raw_data$qn50 == 2] &lt;- &quot;No&quot;
+raw_data$q1[raw_data$q1 == 1] &lt;- &quot;&lt;12&quot;
+raw_data$q1[raw_data$q1 == 2] &lt;- &quot;13&quot;
+raw_data$q1[raw_data$q1 == 3] &lt;- &quot;14&quot;
+raw_data$q1[raw_data$q1 == 4] &lt;- &quot;15&quot;
+raw_data$q1[raw_data$q1 == 5] &lt;- &quot;16&quot;
+raw_data$q1[raw_data$q1 == 6] &lt;- &quot;17&quot;
+raw_data$q1[raw_data$q1 == 7] &lt;- &quot;18+&quot;
+raw_data  %&gt;%  drop_na(q1,qn50) %&gt;%  
+  ggplot(aes(q1)) + 
+  geom_bar(aes(fill = as.character(qn50)),position = &quot;fill&quot;) + 
+  labs(x = &#39;Age&#39;, y = &#39;Prop&#39;,fill = &quot;cocaine use&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-2.png" width="672" /></p>
+<p><br></p>
+<p>From just looking at the graph, it is interesting to see that under the age of 13, kids love to take cocaine, but from 14 to 18, the proportion is slowly growing, which obeies intuition. BUT this is conclusion is very possibly wrong because of the following reasons: one reason for this anomally in the first two age group might be that there is just too little data on them. This might be it because that there are kids who think they are cool and they are just filling up randomly.</p>
+</div>
+</div>

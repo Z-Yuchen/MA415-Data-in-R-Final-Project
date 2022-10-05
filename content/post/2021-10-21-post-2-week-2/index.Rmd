@@ -1,0 +1,89 @@
+---
+title: Initial Load and Clean Data
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-10-21'
+slug: []
+categories: []
+tags: []
+description: This is how we decided to load and clean data.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-10-21T09:12:59+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## How We Loaded and Cleaned Data + Data Explore
+
+### Loading: 
+
+The dataset we finally chose was the first dataset proposed in post one. It is a YRBS(Youth Risk Behavior Surveillance System) dataset from CDC. It is a survey-based research that monitors six major categories of health-related behaviors that contribute to the leading causes of death and disability among youth and adults. The main goal of this dataset is to provide researchers, policymakers, and public health officials with data to identify trends in risky behavior over time among youth and to aid public health planning and policymaking. This dataset was collected through one-time national surveys and ongoing surveys collected from middle school students. It has multiple columns of parameters either numerical and categorical.  We downloaded the data from the CDC website in the form of Access. Then using Access which is a microsoft software to convert the data file into CSV format. The button is external dataset and then selects CSV format. To put CSV into R, we used the read.csv() function in the tidyverse package. 
+
+<br>
+
+```{r, warning=FALSE}
+library(tidyverse)
+raw_data <- read_csv('data/test.csv')
+```
+
+<br>
+
+### Cleaning:
+```{r, warning=FALSE}
+Missing_value_overview <- raw_data %>% summarise_all(funs(sum(is.na(.))))
+Discard_variable <- as.data.frame(t(as.matrix(Missing_value_overview))) %>% filter(V1 > 13677 * 0.3)
+```
+```{r}
+Discard_variable <- as.data.frame(t(as.matrix(Discard_variable)))
+Discard_variable <- Discard_variable%>%
+  rename("drunk driving" = qn10, "texting while driving" = qn11, "forced sex while dating" = qn21, "phisically hurt while dating" = qn22, "suicide injury" = qn29, "num of cigarette" = qn33, "access to vapor" = qn36, "quit smoking" = qn39, "max num of alcohol in a roll" = qn43, "access to alcohol" = qn44, "times of steroids without prescription" = qn55, "alcohol/drug before sex" = qn62, "condom used last sex" = qn63, "pregnancy prevention" = qn64, "amount of milk per day" = qn76, "num of paying for medicine without prescription" = qn90, "num of hallucinogenic drugs" = qn91, "food alergy" = qn94, "muscle strenthen" = qn95, "indoor tanning device usage" = qn96, "sunscreen frequency" = qn97, "difficulties caused by truama" = qn98, "english proficiency" = qn99, "iud or implant device usage" = qniudimp, "birth control pills usage" = qnothhpl, "ways of birth control" = qndualbc, "no pregnancy prevention" = qnbcnone, "drink one+ glass milk per day" = qnmilk1, "drink three+glass milk per day" = qnmilk3)
+Discard_variable <- as.data.frame(t(as.matrix(Discard_variable)))
+knitr::kable(Discard_variable)
+```
+
+<br>
+
+We delete variables with missing values consisting larger than 30% of all observations. In other words, since our total respondents are 13677, we discard variables with missing values that are larger than 13677 * 0.3 = 4103. As the chart shows, 30 variables are discarded.
+
+<br>
+
+### Exploring:
+We decide our first research questions: how does age and BMI together affect health conditions?
+```{r, eval=TRUE}
+raw_data  %>% drop_na(q1,qn50,BMIPCT) %>% 
+  unite(age_cocaine, q1,qn50) %>% 
+  ggplot(aes(x = factor(age_cocaine), y = BMIPCT)) + 
+  geom_boxplot() + 
+  labs(x = "age_cocaine")+scale_x_discrete(guide = guide_axis(n.dodge=2))
+```
+
+<br>
+In this graph, it is clear that age and whether they take cocaine does not affect BMI across each age group greatly, except age under group 1 (under 12 years old) and 2 (13 years old). 
+
+<br>
+
+Another two graphs we made is by doing the following:
+```{r,eval=TRUE}
+raw_data  %>%  drop_na(q1) %>%  ggplot(aes(x = q1)) + geom_bar() + labs(x = 'Age')
+
+raw_data$qn50[raw_data$qn50 == 1] <- "Yes"
+raw_data$qn50[raw_data$qn50 == 2] <- "No"
+raw_data$q1[raw_data$q1 == 1] <- "<12"
+raw_data$q1[raw_data$q1 == 2] <- "13"
+raw_data$q1[raw_data$q1 == 3] <- "14"
+raw_data$q1[raw_data$q1 == 4] <- "15"
+raw_data$q1[raw_data$q1 == 5] <- "16"
+raw_data$q1[raw_data$q1 == 6] <- "17"
+raw_data$q1[raw_data$q1 == 7] <- "18+"
+raw_data  %>%  drop_na(q1,qn50) %>%  
+  ggplot(aes(q1)) + 
+  geom_bar(aes(fill = as.character(qn50)),position = "fill") + 
+  labs(x = 'Age', y = 'Prop',fill = "cocaine use")
+```
+
+<br>
+
+From just looking at the graph, it is interesting to see that under the age of 13, kids love to take cocaine, but from 14 to 18, the proportion is slowly growing, which obeies intuition. BUT this is conclusion is very possibly wrong because of the following reasons: one reason for this anomally in the first two age group might be that there is just too little data on them. This might be it because that there are kids who think they are cool and they are just filling up randomly.

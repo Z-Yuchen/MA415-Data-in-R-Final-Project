@@ -1,0 +1,126 @@
+---
+title: Further Initial Data Cleaning
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-10-29'
+slug: []
+categories: []
+tags: []
+description: This is how we decided to load and clear data.
+toc: yes
+authors: []
+series: []
+lastmod: '2021-10-29T07:58:23+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu</p>
+<div id="data-cleaning-explore-data-equity" class="section level2">
+<h2>Data Cleaning + Explore + Data Equity</h2>
+<p>We continued from our last post after we modified some of our original post 2 on names of variables.</p>
+<pre class="r"><code>library(tidyverse)
+raw_data &lt;- read_csv(&#39;data/test.csv&#39;)</code></pre>
+<div id="data-cleaning" class="section level3">
+<h3>Data Cleaning:</h3>
+<p><br></p>
+<p>Step 1</p>
+<p><br></p>
+<p>We first discard columns which have more than 30% missing values. And stored new data set in to table “processed_data”</p>
+<pre class="r"><code>Missing_value_overview &lt;- raw_data %&gt;% summarise_all(funs(sum(is.na(.))))
+Discard_variable &lt;- as.data.frame(t(as.matrix(Missing_value_overview))) %&gt;% filter(V1 &gt; 13677 * 0.3)
+Discard_variable &lt;- as.data.frame(t(as.matrix(Discard_variable)))
+processed_data &lt;- select(raw_data,!colnames(Discard_variable))</code></pre>
+<p><br></p>
+<p>Step 2</p>
+<p><br></p>
+<p>We then select the column we are going to analyze. We are mainly focused on how these teenagers’ Age and BMI may potentially an effect their time spend on physical activity(q78 - q82) and emergence of risky health behavior (q8-q18)</p>
+<pre class="r"><code>processed_data &lt;- processed_data %&gt;%
+  select(q1,BMIPCT,qn8,qn9,qn12,qn13,qn14,qn15,qn16,qn17,qn18,qn78,qn79,qn80,qn81,qn82)</code></pre>
+<p><br></p>
+<p>Step 3</p>
+<p><br></p>
+<p>We then clean the rows with missing value for age and BMI as these two are the primary factor for our analysis.</p>
+<pre class="r"><code>processed_data &lt;- processed_data  %&gt;% drop_na(c(q1,BMIPCT)) </code></pre>
+<p><br></p>
+<p>Step 4</p>
+<p><br></p>
+<p>We convert BMI percentile into a categorical variable ‘weight_status’ according to the CDC BMI rules.</p>
+<pre class="r"><code>processed_data &lt;- processed_data %&gt;% mutate(Weight_status = ifelse(BMIPCT&lt;5,&quot;underweight&quot;, ifelse(BMIPCT&gt;=5 &amp; BMIPCT&lt;85,&quot;healthyweight&quot;,ifelse(BMIPCT&gt;=85 &amp; BMIPCT&lt;95,&quot;overweight&quot;,ifelse(BMIPCT&gt;=95,&quot;obesity&quot;,BMIPCT))))) </code></pre>
+<p><br></p>
+<p>Step 5</p>
+<p><br></p>
+<p>One important thing to do so that others may understand what we are doing is that we need to rename our variables:</p>
+<pre class="r"><code>processed_data &lt;- processed_data%&gt;% 
+  rename(&quot;Age&quot; = q1, 
+         &quot;Body Mass Index Percentage&quot; = BMIPCT, 
+         &quot;Seat belt use&quot;= qn8, 
+         &quot;Riding with a drinking driver&quot; = qn9, 
+         &quot;Weapon carrying&quot;=qn12,
+         &quot;Weapon carrying at school&quot; = qn13, 
+         &quot;Gun carrying past 12 mos&quot; = qn14,
+         &quot;Safety concerns at school&quot; = qn15,
+         &quot;Threatened at school&quot;= qn16, 
+         &quot;Physical fighting&quot; = qn17, 
+         &quot;Physical fighting at school&quot; = qn18, 
+         &quot;physicallyactive&quot;= qn78,
+         &quot;tv&quot;=qn79,
+         &quot;videogames&quot;=qn80,
+         &quot;gymclass&quot;=qn81,
+         &quot;sports&quot;=qn82)</code></pre>
+<p><br></p>
+<p>Step 6</p>
+<p><br></p>
+<p>We then transfer survey answers into real ages under ‘Age’. (Note: since there are only a few number of teenagers have an age that is either &lt;12 or 13, we combine these two categories with the age of 14 into a new group called “&lt;14”)</p>
+<pre class="r"><code>processed_data$Age[processed_data$Age == 1 | processed_data$Age == 2 | processed_data$Age ==  3] &lt;- &quot;&lt;14&quot;
+processed_data$Age[processed_data$Age == 4] &lt;- &quot;15&quot;
+processed_data$Age[processed_data$Age == 5] &lt;- &quot;16&quot;
+processed_data$Age[processed_data$Age == 6] &lt;- &quot;17&quot;
+processed_data$Age[processed_data$Age == 7] &lt;- &quot;18+&quot;</code></pre>
+<p>Here, the data cleaning is complete for this post.</p>
+<p><br></p>
+</div>
+<div id="data-exploring" class="section level3">
+<h3>Data Exploring:</h3>
+<p>Now, We find some summary statistics for Age!</p>
+<pre class="r"><code>process_age &lt;- processed_data %&gt;% group_by(Age) %&gt;% summarize(participated_teenagers=n()) 
+process_age %&gt;%  ggplot(aes(x = Age, y= participated_teenagers)) + geom_bar(stat=&quot;identity&quot;) + geom_text(aes(label = participated_teenagers), size = 5, colour = &#39;red&#39;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/age-1.png" width="672" /></p>
+<p>As the bar-graph shows, people takking the survey mainly fall into the age group of 15s, 16s, and 17s.</p>
+<p><br></p>
+<p>We also drew a pie chart to see an overview for Weight status</p>
+<pre class="r"><code>process_Weight_status &lt;- processed_data %&gt;% group_by(Weight_status) %&gt;% summarize(count=n()) %&gt;% mutate(perc = count / sum(count)) %&gt;% arrange(perc) %&gt;% mutate(labels = scales::percent(perc))
+ggplot(process_Weight_status, aes(x=&quot;&quot;, y=count, fill= Weight_status)) +
+  geom_bar(stat=&quot;identity&quot;, width=1) +  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5), size = 5, colour = &#39;white&#39;) +
+            coord_polar(&quot;y&quot;, start=0) + theme_void()</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/Weight_status-1.png" width="672" /></p>
+<p>As the pie chart shows, the majority of respondents have a healthy weight status. Also, the underweight respondents make up the least proportion. This is not suprising to see as the majority of the people should in normal body weight.</p>
+<p><br></p>
+<p>We also plotted weight against age:</p>
+<pre class="r"><code>processed_data  %&gt;% ggplot(aes(Age)) + geom_bar(aes(fill = as.character(Weight_status)),position = &quot;fill&quot;) + labs(x = &#39;Age&#39;, y = &#39;Prop&#39;,fill = &quot;Weight_status&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>This bar chart shows that the relative distribution for weight status for each age group is similar. This fact can help us avoid bias when analyzing if there is any correlation between certian parameters and age groups in the future. The only trend we can identify is that for 17 age group, the proportion of healthy weight respondents is slightly less than other age groups.</p>
+<p><br></p>
+</div>
+<div id="data-equity" class="section level3">
+<h3>Data Equity:</h3>
+<p><br></p>
+<p>Beneficence:</p>
+<p><br>
+The collection process of our dataset strictly follows the principle of beneficence. There is no collection of personal identification information in any form, which is important since the dataset collected personal information. In our analysis, we mainly looked at effects of different age groups and BMIs, which is our way to avoid problems caused to groups with specific gender or race. This would also functions to avoid causing people who took the survey problem because their information are not leaked while having the potential to bring them benefits.</p>
+<p><br>
+Justice:</p>
+<p><br>
+The entire dataset is not collected by experiments but by survey, so there are not a lot of burden for each individual of collection except for the amount of time it took them to fill out the survey so we think there is not a undue burden to each individual.</p>
+<p><br>
+Limitations:</p>
+<p><br>
+One limitation of our dataset might be that we will not have trend graphs as the dataset is basically a survey in multiple choice form, so most of our data would be categorical. Hence, we might not be able to explore the data with a curve trend.</p>
+</div>
+</div>

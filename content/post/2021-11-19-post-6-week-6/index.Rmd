@@ -1,0 +1,125 @@
+---
+title: Dataset Combining
+author: Xianjue Huang & Yu Yan & Xuan Wu & Minghang Hong & Yuchen Zhu
+date: '2021-11-19'
+slug: []
+categories: []
+tags: []
+description: Dataset Combining
+toc: yes
+authors: []
+series: []
+lastmod: '2021-11-19T10:08:26+08:00'
+featuredVideo: ~
+featuredImage: ~
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Dataset Combining
+
+In the last time, we use logistic regression to build a model for predicting suicide contemplation using race, weight_status, and sex. Therefore, to investigate whether if there is a relationship between suicide contemplation and real suicide occurrence for various gender and races, we combine our previous dataset with a new dataset. The new dataset is pulled from CDC wonder with ICD-10 codes covering X60-X84 representing intentional self harm as cause of death. 
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+#load full processed data 
+full_data <- get(load("data/processed_data_all.RData"))
+```
+
+```{r message=FALSE, warning=FALSE}
+#load other suicide dataset
+library(data.table)
+suicide <- fread("data/suicide.txt")
+```
+
+```{r}
+# rename columns for Race for both dataset to be consistent
+suicide$Race[suicide$Race == "American Indian or Alaska Native"] <- 'American Indian/Alaska Native' 
+full_data$race[full_data$race == "Asian"] <- 'Asian or Pacific Islander'
+full_data$race[full_data$race == "Native Hawaiian/Other Pacific Islander"] <- 'Asian or Pacific Islander'
+
+#exclude Hispanic/Latino, Multiple Races (Non-Hispanic) race from the original dataset (Explained at the end)
+processed_original_data <- full_data %>% filter(!(race == "Hispanic/Latino" | race == "Multiple Races (Non-Hispanic)"))
+```
+
+```{r message=FALSE, warning=FALSE}
+# clean the new dataset (we explain why choose age from 11 to 19 at the end)
+processed_suicide <- suicide %>% select(Year, Race, Gender, `Single-Year Ages Code`,Deaths,Population) %>% filter(`Single-Year Ages Code` <= 19 & `Single-Year Ages Code` >= 11) 
+
+# fill na with 0 for further calculation
+processed_suicide$Population = as.numeric(as.character(processed_suicide$Population))
+processed_suicide[is.na(processed_suicide)] <- 0
+```
+
+```{r message=FALSE, warning=FALSE}
+# Create a table for real suicide occurrence for gender in each year
+suicide_gender_A <- processed_suicide %>% group_by(Year,Gender) %>% summarise(Deaths = sum(Deaths))
+suicide_gender_B <- processed_suicide %>% group_by(Year,Gender) %>% summarise(Population = sum(Population))
+suicide_gender <- left_join(suicide_gender_A, suicide_gender_B, by = c("Year","Gender")) %>% mutate(prob_real_suicide = Deaths/Population * 100) %>% select(Year, Gender, prob_real_suicide)
+
+# Create a table for real suicide occurrence for race in each year
+suicide_race_A <- processed_suicide %>% group_by(Year,Race) %>% summarise(Deaths = sum(Deaths))
+suicide_race_B <- processed_suicide %>% group_by(Year,Race) %>% summarise(Population = sum(Population))
+suicide_race <- left_join(suicide_race_A, suicide_race_B, by = c("Year","Race")) %>% mutate(prob_real_suicide = Deaths/Population * 100) %>% select(Year, Race, prob_real_suicide)
+```
+
+```{r}
+# conduct 2 logistic regressions for predicting probability of suicide contemplation using gender and race 
+predict_suicide_sex <- full_data %>% select(year,sex,serious_consideration_suicide)
+predict_suicide_sex_model <- glm(serious_consideration_suicide ~ as.factor(year) + sex, data = predict_suicide_sex, family = binomial)
+
+predict_suicide_race <- full_data %>% select(year,race,serious_consideration_suicide)
+predict_suicide_race_model <- glm(serious_consideration_suicide ~ as.factor(year) + race, data = predict_suicide_race, family = binomial)
+
+#test whether predictors are significant 
+summary(predict_suicide_sex_model)
+summary(predict_suicide_race_model)
+```
+
+```{r}
+# check the coefficient 
+(suicide_coef_sex <- coef(predict_suicide_sex_model))
+(suicide_coef_race <- coef(predict_suicide_race_model))
+```
+
+```{r}
+# do the prediction using the logistic regression model we just built
+suicide_sex_predictions <- predict_suicide_sex %>% modelr::data_grid(year,sex) %>% modelr::add_predictions(predict_suicide_sex_model) %>% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %>% select(!pred) %>% arrange(desc(prob_contem_suicide))
+
+suicide_race_predictions <- predict_suicide_race %>% modelr::data_grid(year,race) %>% modelr::add_predictions(predict_suicide_race_model) %>% mutate(prob_contem_suicide = 1- exp(pred)/(1+exp(pred))) %>% select(!pred) %>% arrange(desc(prob_contem_suicide))
+
+#rename sex variable for an easy understanding in table
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 0] <- 'Female' #Female
+suicide_sex_predictions$sex[suicide_sex_predictions$sex == 1] <- 'Male' #Male
+
+#rename columns name
+names(suicide_gender)[names(suicide_gender) == 'Year'] <- "year"
+names(suicide_gender)[names(suicide_gender) == 'Gender'] <- "sex"
+
+names(suicide_race)[names(suicide_race) == 'Year'] <- "year"
+names(suicide_race)[names(suicide_race) == 'Race'] <- "race"
+
+#combine predicted suicide contemplation with real suicide occurrence
+suicide_comparsion_sex <- left_join(suicide_gender,suicide_sex_predictions, by = c("year","sex")) %>% drop_na(prob_contem_suicide)
+
+suicide_comparsion_race <- left_join(suicide_race,suicide_race_predictions, by = c("year","race")) %>% drop_na(prob_contem_suicide)
+
+#visualize using kable
+knitr::kable(suicide_comparsion_sex)
+knitr::kable(suicide_comparsion_race)
+```
+
+```{r}
+#Now let's draw a chart to see if there is any relationship between suicide contemplation and real suicide occurrence for Gender and Race
+
+#Gender
+ggplot(suicide_comparsion_sex, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = sex)) + geom_line(aes(y = prob_contem_suicide, color = sex)) + labs(y = "prob") + annotate("text", x = 2003, y = 0.15, label = "predicted suicide contemplation") + annotate("text", x = 2003, y = 0.02, label = "real suicide")
+
+#Race
+ggplot(suicide_comparsion_race, aes(x = year)) + geom_line(aes(y = prob_real_suicide, color = race)) + geom_line(aes(y = prob_contem_suicide, color = race)) + labs(y = "prob") + annotate("text", x = 2010, y = 0.22, label = "predicted suicide contemplation") + annotate("text", x = 2003, y = 0.04, label = "real suicide")
+```
+Observations: 
+
+For gender chart showed above, we surprisingly find that male has a lower probability to declare themselves has suicide contemplation while male's real suicide probability is higher. This is probability caused by the fact that female is more inclined to share their real thoughts and more easier to get emotional, while male is not very willing to told their suicide contemplation but they have indeed. For race chart showed above, we find that the  probability is similar for predicted suicide contemplation and real suicide probability.
+
+There are limitations for these comparison as the datasets are not same, meaning that the population is not exactly the same. Furthermore, for predictor 'gender' , our previous dataset have categories "<12" and "18+" while the new dataset has information for each age group. Hence, to minimize the impact of this differences and considering the fact that the original dataset only interviews middle and high-school students, we include age from a range of 11 to 19 in the new dataset. Also, for predictor 'race', previous dataset includes Hispanic and non-Hispanic in the race while the second dataset add a new columns indicating the Hispanic-status. To solve this issue, we exclude those Hispanic and non-Hispanic races in previous dataset to keep consistent for both datasets.

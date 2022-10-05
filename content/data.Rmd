@@ -1,0 +1,158 @@
+---
+title: Data
+description:
+toc: true
+featuredVideo:
+featuredImage: https://www.millardk12.org/fms/wp-content/uploads/sites/4/2020/06/dataandcloudcomputing.jpg
+draft: false
+---
+
+Authors: Minghang Hong, Xianjue Huang, Xuan Wu, Yu Yan, and Yuchen Zhu
+
+## Introduction
+
+<br>
+
+It is a well known fact that health risk behaviors affect both people's physical and mental health. Hence, we got interested in understanding what health risk behaviors are presented in the youth population in the U.S., and how some risk behaviors, as well as attirbutes such as gender and race, may have contributed to (the possibility for) suicide. 
+
+<br>
+
+The main dataset we are analyzing is from the Youth Risk Behavior Surveillance System (YRBSS), posted by [CDC](https://www.cdc.gov/healthyyouth/data/yrbs/index.htm). The data was collected in two ways: first, the CDC, states, territorials, and tribals will provide national school-based surveys; second, the states, territories, and local education and health agencies and tribal governments will also provide local surveys (YRBSS). From the dataset, it seems like the data was originally collected to help understand what kinds of health risk behaviors are presented in the youth population of the U.S. (for example: drinking, smoking, and doing drugs). 
+
+
+<br>
+
+Another dataset we used is collected by the National Center for Health Statistics [(NCHS)](https://wonder.cdc.gov/controller/datarequest/D77;jsessionid=1FBA3D761271E67C307492F70D6C) based on death certificates for U.S (again, it is posted by CDC). residents. This dataset contains the real suicide death numbers throught out the year, and we used this dataset to see the variation in the ratio of contemplated suicides to real suicides from 1999 to 2019. 
+<br>
+Note that this dataset is retrieved by selecting "All" for all sections of selections with two exceptions: first, in the 1st chunk, select Hispanic Origin after the first "And By"; and second, in the 6th chunk, select the X60-X84 (intentional self-harm) section in V01-Y89. This file has no further need for thorough data cleaning.
+
+<br> 
+
+## Variables
+
+Our initial dataset had 151 variables, and many of them are not that useful. Hence, based on our data cleaning process, we got 37 variables. We selected the following variables based on our interest and early-stage data exploraty: 
+
+<br>
+
+1. sex: categorized as male and female, based on the YRBSS survey.
+<br>
+2. sitename: the name of the state that the individual lives in when he/she took the survey.
+<br>
+3. race4: categorized as 1.White/2.Black or African American/3.Hispanic or Latino/4.All Other Races. This is based on the YRBSS survey.
+<br>
+4. race: this has 7 categories that had the 1.American Indian or Alaska Native/2.Asian/3.Black or African American/4.Hispanic or Latino/5.Native Hawaiian or Other Pacific Islander/6.White/7.Multiple Races (Non-Hispanic). This is based on the YRBSS survey.
+<br>
+5. Weight status: categorized as Overweight, Underweight, Healthy weight, and Obesity.
+<br>
+6. weapon_carrying: whether the individual carried a weapon during past days.
+<br>
+7. weapon_carrying_at_school: whether the individual carried a weapon ON CAMPUS during past days.
+<br>
+8. safety_concerns_at_school: whether the individual did not go to school because he/she felt unsafe.
+<br>
+9. Threatened_at_school: whether the individual was actually threatened by weapons on campus.
+<br>
+10. total_num_methamphetamines: whether the individual used methamphetamines.
+<br>
+11. first_time_drinking: whether the individual never drank alcohol, drank before age 13, or after 13 for the first time.
+<br>
+12. num_cigarette_per_day: whether the individual smoke cigarette every day.
+<br>
+13. total_num_get_high: whether the individual got high by taking drugs etc.
+<br>
+14. total_num_needle_for_drug: whether the individual used needles to inject illegal drugs.
+<br>
+15. has_got_drug_at_school: whether the individual had got drugs / got drug offerings at school
+<br>
+16. serious_consideration_suicide: whether the individual seriously considered suicide during the past few days.
+
+
+<br>
+
+Note that we converted many variables from "numerical" into categorical. This is because that most of the values, though looked like numerical, but were actually categorized by multiple choices (A,B,C,D,E,F,G,H). Hence, the naming of the variables might look weird.
+
+<br>
+
+<br>
+The final variables that we got to use for models are:
+
+<br>
+
+1. sex
+<br>
+2. weapon_carrying
+<br>
+3. safety_concerns_at_school
+<br>
+4. Threatened_at_school
+<br>
+5. first_time_drinking
+<br>
+6. total_num_get_high
+<br>
+7. has_got_drug_at_school
+
+<br>
+
+We still saved weight status, race, and sitename for interactive purpose but not for modeling.
+
+<br>
+
+In the NCHS dataset, we selected the following variables to match with the variables we had from our main variables:
+
+<br>
+
+1. year: ranged from 1999-2019
+<br>
+2. sex: male and female
+<br>
+3. Single-Year Ages Code: age
+<br>
+4. Death: numerical value of suicide
+<br>
+5. Population: this is for calculation purpose.
+
+<br>
+
+## Data Cleaning
+
+<br>
+
+When we were loading the dataset, we noticed that there were a lot of missing values, and keeping them might introduce some unwanted biases. Hence, we made a selection threshold of 30% to clean our dataset initially, meaning that if more than 30% of the data in one column/variable is missing, we delete the column. This is to delete columns that seem to be helping yet may bring too much biases.
+
+<br>
+
+After removing all those variables, we had 37 columns left, including basic information, questions regarding safety issues, depression and suicide considerations, smoking, drinking and doing drugs. Note that basic information does not contain identificaiton data of any individual. Instead, it consists of physical information such as weight status, sex, race, and age. 
+
+<br>
+
+We noticed that most of the variables are categorical, so we converted all the variables into the type they are supposed to be. The variables that were not categorical were "bmi," "height," "weight," and "bmi percentage." Since the four variables are related to each other (bmi is calculated by height and weight,) we created our own variable called "Weight_status," which is a categorical data. It was created according to CDC's categorization of weight status. It indicates whether the individual is in healthy/over/under weight condition or is obese.
+
+<br>
+
+In addition of removing all those invalid variables, we also combined age groups due to the fact that not a lot of data on 12 and 13 years old students were collected. We hence conbined these two category with the 14-year-old. Other cleaning we did was converting the names of the variables and the names of their answers. For example, we renamed female and male when they were represented as 1 and 2 respectively.
+
+<br>
+
+Note that the name conversion for data points is based on whether the answer to the survery question is being labeled as bold. For example, if answer A and B are in bold form, we combined them together as one data value, say, yes, and the rest of the answers are combined to be no.
+
+<br>
+
+In our project, we used the following R packages other than tidyverse and other packages mentioned in class:
+
+<br>
+1. ROCR: We used this package for ploting ROC curve and calculating AUC values.
+<br>
+2. data.table: We used it for reading the .txt file from the NCHS dataset.
+<br>
+3. formattable: We used it for table-making for AUC values.
+<br>
+4. ggpubr: We used it for combining graphs.
+
+<br>
+
+The load_and_clean.R file can be found [here](https://errormaker.netlify.app/load_and_clean_data.R)
+
+## Bibliography
+
+Lead Image from https://www.millardk12.org/fms/wp-content/uploads/sites/4/2020/06/dataandcloudcomputing.jpg
